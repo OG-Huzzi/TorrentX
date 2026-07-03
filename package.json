@@ -1,0 +1,62 @@
+{
+  "name": "torrentx",
+  "version": "0.1.4",
+  "description": "Fast, adaptive torrent meta-search for every terminal.",
+  "type": "module",
+  "bin": {
+    "torrentx": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.18"
+  },
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm test && npm run build",
+    "prepublishOnly": "npm run check"
+  },
+  "keywords": [
+    "torrent",
+    "magnet",
+    "meta-search",
+    "terminal",
+    "cli",
+    "tui",
+    "termux",
+    "anime",
+    "movies"
+  ],
+  "license": "MIT",
+  "overrides": {
+    "esbuild": "$esbuild"
+  },
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "cli-table3": "^0.6.5",
+    "commander": "^13.1.0",
+    "env-paths": "^3.0.0",
+    "fast-xml-parser": "^5.2.5",
+    "ink": "^5.2.1",
+    "parse-torrent": "^11.0.21",
+    "react": "^18.3.1",
+    "webtorrent": "^2.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "@types/react": "^18.3.23",
+    "esbuild": "^0.28.1",
+    "ink-testing-library": "^4.0.0",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.3"
+  }
+}

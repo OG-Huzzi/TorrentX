@@ -1,0 +1,53 @@
+declare module "webtorrent" {
+  import { EventEmitter } from "node:events";
+
+  interface TorrentOptions {
+    path?: string;
+    announce?: string[];
+    destroyStoreOnDestroy?: boolean;
+    [key: string]: unknown;
+  }
+
+  interface Torrent extends EventEmitter {
+    infoHash: string;
+    magnetURI: string;
+    name: string;
+    length: number;
+    progress: number;
+    downloadSpeed: number;
+    uploadSpeed: number;
+    uploaded: number;
+    downloaded: number;
+    numPeers: number;
+    ratio: number;
+    done: boolean;
+    paused: boolean;
+    ready: boolean;
+    destroyed: boolean;
+    files: TorrentFile[];
+    pause(): void;
+    resume(): void;
+    destroy(opts?: { destroyStore?: boolean }, cb?: () => void): void;
+    deselect(start: number, end: number, priority?: number): void;
+    select(start: number, end: number, priority?: number): void;
+  }
+
+  interface TorrentFile {
+    name: string;
+    path: string;
+    length: number;
+  }
+
+  type OnTorrentCallback = (torrent: Torrent) => void;
+
+  class WebTorrent extends EventEmitter {
+    torrents: Torrent[];
+    add(magnetOrUrl: string, opts?: TorrentOptions, onTorrent?: OnTorrentCallback): Torrent;
+    add(magnetOrUrl: string, onTorrent?: OnTorrentCallback): Torrent;
+    remove(torrent: Torrent | string, opts?: { destroyStore?: boolean }, cb?: () => void): void;
+    destroy(cb?: () => void): void;
+  }
+
+  export default WebTorrent;
+  export { Torrent, TorrentFile, TorrentOptions, OnTorrentCallback };
+}
