@@ -35,18 +35,18 @@ export interface TorrentHandle {
 }
 
 export interface EngineEvents {
-  progress: (infoHash: string, progress: DownloadProgress) => void;
-  done: (infoHash: string) => void;
-  error: (infoHash: string, error: Error) => void;
-  metadata: (infoHash: string, name: string, totalBytes: number) => void;
+  progress: (id: string, progress: DownloadProgress) => void;
+  done: (id: string) => void;
+  error: (id: string, error: Error) => void;
+  metadata: (id: string, name: string, totalBytes: number) => void;
 }
 
 /**
- * Thin wrapper around WebTorrent. We lazily import it so the module doesn't
- * explode at import time if WebTorrent has issues.
+ * Wrapper around WebTorrent tracking downloads by their unique Download ID.
  */
 export class DownloadEngine extends EventEmitter {
   private client: WebTorrent | null = null;
+  private idToTorrent = new Map<string, Torrent>();
   private intervals = new Map<string, ReturnType<typeof setInterval>>();
   private destroyed = false;
 
@@ -63,6 +63,7 @@ export class DownloadEngine extends EventEmitter {
   async add(
     magnetOrUrl: string,
     downloadPath: string,
+    id: string,
   ): Promise<TorrentHandle> {
     // Ensure the download directory exists before WebTorrent tries to write.
     await mkdir(downloadPath, { recursive: true });
@@ -75,69 +76,74 @@ export class DownloadEngine extends EventEmitter {
       throw err;
     }
 
-    const hash = torrent.infoHash;
+    this.idToTorrent.set(id, torrent);
 
     // Emit metadata once we know the torrent name/size.
     if (torrent.ready) {
-      this.emit("metadata", hash, torrent.name, torrent.length);
+      this.emit("metadata", id, torrent.name, torrent.length);
     } else {
       torrent.once("metadata", () => {
-        this.emit("metadata", hash, torrent.name, torrent.length);
+        this.emit("metadata", id, torrent.name, torrent.length);
       });
     }
 
     // Wire up error handler (non-fatal — just surfaces to UI).
     torrent.on("error", (err: Error) => {
-      this.emit("error", hash, err);
+      this.emit("error", id, err);
     });
 
     torrent.on("done", () => {
-      this.clearProgressInterval(hash);
-      this.emitProgress(hash, torrent);
-      this.emit("done", hash);
+      this.clearProgressInterval(id);
+      this.emitProgress(id, torrent);
+      this.emit("done", id);
     });
 
     // Poll for progress updates immediately to show download speed/peers from the start.
     const timer = setInterval(() => {
       if (!torrent.destroyed) {
-        this.emitProgress(hash, torrent);
+        this.emitProgress(id, torrent);
       } else {
-        this.clearProgressInterval(hash);
+        this.clearProgressInterval(id);
       }
     }, 500);
-    this.intervals.set(hash, timer);
+    this.intervals.set(id, timer);
 
     return this.toHandle(torrent);
   }
 
-  pause(infoHash: string): boolean {
-    const torrent = this.findTorrent(infoHash);
+  has(id: string): boolean {
+    return this.idToTorrent.has(id);
+  }
+
+  pause(id: string): boolean {
+    const torrent = this.idToTorrent.get(id);
     if (!torrent) return false;
     torrent.pause();
     return true;
   }
 
-  resume(infoHash: string): boolean {
-    const torrent = this.findTorrent(infoHash);
+  resume(id: string): boolean {
+    const torrent = this.idToTorrent.get(id);
     if (!torrent) return false;
     torrent.resume();
     return true;
   }
 
-  cancel(infoHash: string, destroyFiles = false): boolean {
-    const torrent = this.findTorrent(infoHash);
+  cancel(id: string, destroyFiles = false): boolean {
+    const torrent = this.idToTorrent.get(id);
     if (!torrent) return false;
-    this.clearProgressInterval(infoHash);
+    this.clearProgressInterval(id);
+    this.idToTorrent.delete(id);
     torrent.destroy({ destroyStore: destroyFiles });
     return true;
   }
 
-  stopSeed(infoHash: string): boolean {
-    return this.cancel(infoHash, false);
+  stopSeed(id: string): boolean {
+    return this.cancel(id, false);
   }
 
-  getHandle(infoHash: string): TorrentHandle | undefined {
-    const torrent = this.findTorrent(infoHash);
+  getHandle(id: string): TorrentHandle | undefined {
+    const torrent = this.idToTorrent.get(id);
     return torrent ? this.toHandle(torrent) : undefined;
   }
 
@@ -146,6 +152,7 @@ export class DownloadEngine extends EventEmitter {
     this.destroyed = true;
     for (const timer of this.intervals.values()) clearInterval(timer);
     this.intervals.clear();
+    this.idToTorrent.clear();
     if (this.client) {
       await new Promise<void>((resolve) =>
         this.client!.destroy(() => resolve()),
@@ -156,25 +163,20 @@ export class DownloadEngine extends EventEmitter {
 
   // ---- internal helpers ----
 
-  private findTorrent(infoHash: string): Torrent | undefined {
-    if (!this.client) return undefined;
-    return this.client.torrents.find((t) => t.infoHash === infoHash);
-  }
-
-  private clearProgressInterval(infoHash: string) {
-    const timer = this.intervals.get(infoHash);
+  private clearProgressInterval(id: string) {
+    const timer = this.intervals.get(id);
     if (timer) {
       clearInterval(timer);
-      this.intervals.delete(infoHash);
+      this.intervals.delete(id);
     }
   }
 
-  private emitProgress(infoHash: string, torrent: Torrent) {
-    const total = torrent.length || 1;
+  private emitProgress(id: string, torrent: Torrent) {
+    const total = torrent.length || 0;
     const downloaded = torrent.downloaded ?? 0;
     const speed = torrent.downloadSpeed ?? 0;
     const remaining = total - downloaded;
-    const eta = speed > 0 ? Math.ceil(remaining / speed) : -1;
+    const eta = speed > 0 && remaining > 0 ? Math.ceil(remaining / speed) : -1;
 
     const prog: DownloadProgress = {
       downloadSpeed: speed,
@@ -187,23 +189,23 @@ export class DownloadEngine extends EventEmitter {
       peers: torrent.numPeers ?? 0,
       ratio: torrent.ratio ?? 0,
     };
-    this.emit("progress", infoHash, prog);
+    this.emit("progress", id, prog);
   }
 
   private toHandle(torrent: Torrent): TorrentHandle {
     return {
       infoHash: torrent.infoHash,
-      name: torrent.name,
-      length: torrent.length,
-      progress: torrent.progress,
-      downloadSpeed: torrent.downloadSpeed,
-      uploadSpeed: torrent.uploadSpeed,
-      uploaded: torrent.uploaded,
-      downloaded: torrent.downloaded,
-      numPeers: torrent.numPeers,
-      ratio: torrent.ratio,
-      done: torrent.done,
-      paused: torrent.paused,
+      name: torrent.name || torrent.infoHash,
+      length: torrent.length || 0,
+      progress: torrent.progress || 0,
+      downloadSpeed: torrent.downloadSpeed || 0,
+      uploadSpeed: torrent.uploadSpeed || 0,
+      uploaded: torrent.uploaded || 0,
+      downloaded: torrent.downloaded || 0,
+      numPeers: torrent.numPeers || 0,
+      ratio: torrent.ratio || 0,
+      done: torrent.done || false,
+      paused: torrent.paused || false,
     };
   }
 }

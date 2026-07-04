@@ -57,6 +57,10 @@ export class DownloadStore {
     return true;
   }
 
+  async save(): Promise<void> {
+    await this.persist();
+  }
+
   private persist(): Promise<void> {
     // Chain writes so they execute one at a time, avoiding EPERM on Windows
     // when two concurrent renames target the same destination.

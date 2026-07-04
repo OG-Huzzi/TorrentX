@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { FmhyAdapter } from "../src/sources/fmhy.js";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+
+process.env.TORRENTX_CACHE_DIR = join(tmpdir(), `torrentx-test-cache-${Date.now()}`);
+
 import type { HttpClient } from "../src/services/http-client.js";
 import { inferSearchIntent } from "../src/core/query-intelligence.js";
 import type { SearchRequest } from "../src/types/search.js";

@@ -23,14 +23,14 @@ function defaultDownloadDir(): string {
 
 /**
  * Orchestrates the download engine and persistent store.
- * Provides a clean API consumed by both the TUI and CLI commands.
+ * Tracks active downloads directly by their unique Download ID,
+ * preventing race conditions, and keeping database writes in-memory on progress ticks.
  */
 export class DownloadManager extends EventEmitter {
   private engine: DownloadEngine;
   private store: DownloadStore;
   private downloadDir: string;
   private liveProgress = new Map<string, DownloadProgress>();
-  private infoHashToId = new Map<string, string>();
 
   constructor(downloadDir?: string) {
     super();
@@ -65,6 +65,24 @@ export class DownloadManager extends EventEmitter {
 
   async startDownload(result: SearchResult): Promise<DownloadItem> {
     const magnet = actionableUri(result);
+
+    // Prevent duplicate downloads: check if this magnet/infohash is already in the list
+    const infoHashRegex = /xt=urn:btih:([a-fA-F0-9]{32,40})/i;
+    const match = magnet.match(infoHashRegex);
+    const incomingHash = match ? match[1]!.toLowerCase() : null;
+
+    const existing = this.store.getAll().find((r) => {
+      if (incomingHash) {
+        const rMatch = r.magnetUri.match(infoHashRegex);
+        if (rMatch && rMatch[1]!.toLowerCase() === incomingHash) return true;
+      }
+      return r.magnetUri === magnet;
+    });
+
+    if (existing) {
+      throw new Error("This torrent is already in your downloads list!");
+    }
+
     const id = stableHash(`dl-${magnet}-${Date.now()}`);
     const record: DownloadRecord = {
       id,
@@ -98,8 +116,7 @@ export class DownloadManager extends EventEmitter {
   async pauseDownload(id: string): Promise<boolean> {
     const record = this.store.getById(id);
     if (!record) return false;
-    const infoHash = this.findInfoHash(id);
-    if (infoHash) this.engine.pause(infoHash);
+    this.engine.pause(id);
     await this.store.updateRecord(id, { status: "paused" });
     return true;
   }
@@ -107,24 +124,19 @@ export class DownloadManager extends EventEmitter {
   async resumeDownload(id: string): Promise<boolean> {
     const record = this.store.getById(id);
     if (!record) return false;
-    const infoHash = this.findInfoHash(id);
-    if (infoHash) {
-      this.engine.resume(infoHash);
+    
+    if (this.engine.has(id)) {
+      this.engine.resume(id);
       await this.store.updateRecord(id, { status: "downloading" });
     } else {
-      // Re-add to engine if it was cleaned up.
       await this.resumeInEngine(record);
     }
     return true;
   }
 
   async cancelDownload(id: string, deleteFiles = false): Promise<boolean> {
-    const infoHash = this.findInfoHash(id);
-    if (infoHash) {
-      this.engine.cancel(infoHash, deleteFiles);
-      this.infoHashToId.delete(infoHash);
-      this.liveProgress.delete(id);
-    }
+    this.engine.cancel(id, deleteFiles);
+    this.liveProgress.delete(id);
     const removed = await this.store.removeRecord(id);
     if (removed) this.emit("removed", id);
     return removed;
@@ -135,8 +147,7 @@ export class DownloadManager extends EventEmitter {
     if (!record) return undefined;
 
     if (record.status === "seeding") {
-      const infoHash = this.findInfoHash(id);
-      if (infoHash) this.engine.stopSeed(infoHash);
+      this.engine.stopSeed(id);
       await this.store.updateRecord(id, { status: "completed" });
       return "completed";
     }
@@ -160,6 +171,8 @@ export class DownloadManager extends EventEmitter {
   }
 
   async destroy(): Promise<void> {
+    // Persist final progress records to disk before shutdown
+    await this.store.save().catch(() => {});
     await this.engine.destroy();
   }
 
@@ -168,8 +181,7 @@ export class DownloadManager extends EventEmitter {
   private async resumeInEngine(record: DownloadRecord): Promise<void> {
     await this.store.updateRecord(record.id, { status: "downloading" });
     const sanitized = sanitizeMagnet(record.magnetUri);
-    const handle = await this.engine.add(sanitized, record.downloadPath);
-    this.infoHashToId.set(handle.infoHash, record.id);
+    const handle = await this.engine.add(sanitized, record.downloadPath, record.id);
 
     // Update total bytes once metadata arrives (might differ from search result).
     if (handle.length > 0) {
@@ -180,23 +192,21 @@ export class DownloadManager extends EventEmitter {
   private wireEngineEvents() {
     this.engine.on(
       "progress",
-      (infoHash: string, progress: DownloadProgress) => {
-        const id = this.infoHashToId.get(infoHash);
-        if (!id) return;
+      (id: string, progress: DownloadProgress) => {
         this.liveProgress.set(id, progress);
-        void this.store.updateRecord(id, {
-          downloadedBytes: progress.downloaded,
-          totalBytes: progress.total,
-        });
+        
+        // Optimize: Do NOT persist progress writes to disk on every tick.
+        // Mutate the in-memory record directly to prevent serious I/O bottlenecks.
         const record = this.store.getById(id);
-        if (record) this.emit("progress", this.toItem(record));
+        if (record) {
+          record.downloadedBytes = progress.downloaded;
+          record.totalBytes = progress.total;
+          this.emit("progress", this.toItem(record));
+        }
       },
     );
 
-    this.engine.on("done", (infoHash: string) => {
-      const id = this.infoHashToId.get(infoHash);
-      if (!id) return;
-      // Transition to seeding by default (like Torlink).
+    this.engine.on("done", (id: string) => {
       void this.store.updateRecord(id, {
         status: "seeding",
         completedAt: new Date().toISOString(),
@@ -205,12 +215,7 @@ export class DownloadManager extends EventEmitter {
       if (record) this.emit("done", this.toItem(record));
     });
 
-    this.engine.on("error", (infoHash: string, err: Error) => {
-      const id = this.infoHashToId.get(infoHash);
-      if (!id) return;
-      // Post-init errors: store the message but keep status as-is so
-      // transient network hiccups don't kill the download. The torrent
-      // engine keeps trying automatically.
+    this.engine.on("error", (id: string, err: Error) => {
       void this.store.updateRecord(id, {
         errorMessage: err.message,
       });
@@ -220,22 +225,13 @@ export class DownloadManager extends EventEmitter {
 
     this.engine.on(
       "metadata",
-      (infoHash: string, name: string, totalBytes: number) => {
-        const id = this.infoHashToId.get(infoHash);
-        if (!id) return;
+      (id: string, name: string, totalBytes: number) => {
         void this.store.updateRecord(id, {
           title: name || undefined,
           totalBytes,
         } as Partial<DownloadRecord>);
       },
     );
-  }
-
-  private findInfoHash(id: string): string | undefined {
-    for (const [hash, recordId] of this.infoHashToId) {
-      if (recordId === id) return hash;
-    }
-    return undefined;
   }
 
   private toItem(record: DownloadRecord): DownloadItem {
