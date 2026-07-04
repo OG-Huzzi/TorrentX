@@ -66,12 +66,38 @@ export function DownloadsPanel({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
 
-  // Poll downloads at 500ms for live progress.
+  // Listen to manager events with a 200ms throttle for UI updates, matching torlink exactly.
   useEffect(() => {
-    const tick = () => setDownloads(manager.getDownloads());
-    tick();
-    const timer = setInterval(tick, 500);
-    return () => clearInterval(timer);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const triggerUpdate = () => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        setDownloads(manager.getDownloads());
+      }, 200);
+    };
+
+    manager.on("progress", triggerUpdate);
+    manager.on("added", triggerUpdate);
+    manager.on("removed", triggerUpdate);
+    manager.on("done", triggerUpdate);
+    manager.on("error", triggerUpdate);
+
+    // Initial load
+    setDownloads(manager.getDownloads());
+
+    // Fallback interval just in case we miss any state updates
+    const interval = setInterval(triggerUpdate, 1000);
+
+    return () => {
+      manager.off("progress", triggerUpdate);
+      manager.off("added", triggerUpdate);
+      manager.off("removed", triggerUpdate);
+      manager.off("done", triggerUpdate);
+      manager.off("error", triggerUpdate);
+      clearInterval(interval);
+      if (timer) clearTimeout(timer);
+    };
   }, [manager]);
 
   // Clear notice after 3s.

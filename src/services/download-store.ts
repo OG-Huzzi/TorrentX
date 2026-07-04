@@ -1,11 +1,13 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import envPaths from "env-paths";
 import type { DownloadRecord } from "../types/download.js";
 
-const STATE_DIR =
+export const STATE_DIR =
   process.env.TORRENTX_STATE_DIR ?? envPaths("torrentx", { suffix: "" }).data;
 const STORE_FILE = join(STATE_DIR, "downloads.json");
+export const TORRENTS_DIR = join(STATE_DIR, "torrents");
 
 export class DownloadStore {
   private records: DownloadRecord[] = [];
@@ -61,6 +63,34 @@ export class DownloadStore {
     await this.persist();
   }
 
+  // ---- torrent file cache helpers ----
+
+  getTorrentFilePath(id: string): string {
+    return join(TORRENTS_DIR, `${id}.torrent`);
+  }
+
+  hasTorrentFile(id: string): boolean {
+    return existsSync(this.getTorrentFilePath(id));
+  }
+
+  async saveTorrentFile(id: string, buffer: Buffer): Promise<void> {
+    try {
+      await mkdir(TORRENTS_DIR, { recursive: true });
+      const file = this.getTorrentFilePath(id);
+      const temporary = `${file}.${process.pid}.tmp`;
+      await writeFile(temporary, buffer);
+      await rename(temporary, file);
+    } catch {}
+  }
+
+  async deleteTorrentFile(id: string): Promise<void> {
+    try {
+      await rm(this.getTorrentFilePath(id), { force: true });
+    } catch {}
+  }
+
+  // ---- private helpers ----
+
   private persist(): Promise<void> {
     // Chain writes so they execute one at a time, avoiding EPERM on Windows
     // when two concurrent renames target the same destination.
@@ -71,8 +101,7 @@ export class DownloadStore {
         await writeFile(tmp, JSON.stringify(this.records, null, 2), "utf8");
         await rename(tmp, STORE_FILE);
       } catch {
-        // Best-effort — may fail if the directory was already cleaned up
-        // (e.g. in afterEach test teardown).
+        // Silently catch write errors to avoid crashing during shutdown/TUI tick.
       }
     });
     this.writeQueue = work.catch(() => {});

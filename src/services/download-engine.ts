@@ -38,7 +38,7 @@ export interface EngineEvents {
   progress: (id: string, progress: DownloadProgress) => void;
   done: (id: string) => void;
   error: (id: string, error: Error) => void;
-  metadata: (id: string, name: string, totalBytes: number) => void;
+  metadata: (id: string, name: string, totalBytes: number, torrentFile?: Buffer) => void;
 }
 
 /**
@@ -61,7 +61,7 @@ export class DownloadEngine extends EventEmitter {
   }
 
   async add(
-    magnetOrUrl: string,
+    magnetOrTorrentPath: string | Buffer,
     downloadPath: string,
     id: string,
   ): Promise<TorrentHandle> {
@@ -71,19 +71,19 @@ export class DownloadEngine extends EventEmitter {
 
     let torrent: Torrent;
     try {
-      torrent = client.add(magnetOrUrl, { path: downloadPath, announce: DEFAULT_TRACKERS });
+      torrent = client.add(magnetOrTorrentPath, { path: downloadPath, announce: DEFAULT_TRACKERS });
     } catch (err) {
       throw err;
     }
 
     this.idToTorrent.set(id, torrent);
 
-    // Emit metadata once we know the torrent name/size.
+    // Emit metadata once we know the torrent name/size/torrentFile bytes.
     if (torrent.ready) {
-      this.emit("metadata", id, torrent.name, torrent.length);
+      this.emit("metadata", id, torrent.name, torrent.length, torrent.torrentFile);
     } else {
       torrent.once("metadata", () => {
-        this.emit("metadata", id, torrent.name, torrent.length);
+        this.emit("metadata", id, torrent.name, torrent.length, torrent.torrentFile);
       });
     }
 

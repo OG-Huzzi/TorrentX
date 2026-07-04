@@ -137,6 +137,7 @@ export class DownloadManager extends EventEmitter {
   async cancelDownload(id: string, deleteFiles = false): Promise<boolean> {
     this.engine.cancel(id, deleteFiles);
     this.liveProgress.delete(id);
+    await this.store.deleteTorrentFile(id);
     const removed = await this.store.removeRecord(id);
     if (removed) this.emit("removed", id);
     return removed;
@@ -180,8 +181,15 @@ export class DownloadManager extends EventEmitter {
 
   private async resumeInEngine(record: DownloadRecord): Promise<void> {
     await this.store.updateRecord(record.id, { status: "downloading" });
-    const sanitized = sanitizeMagnet(record.magnetUri);
-    const handle = await this.engine.add(sanitized, record.downloadPath, record.id);
+    
+    // Parity with torlink: check if we have the cached .torrent file.
+    // If we do, load from it to start metadata-less download instantly!
+    const hasCachedTorrent = this.store.hasTorrentFile(record.id);
+    const source = hasCachedTorrent
+      ? this.store.getTorrentFilePath(record.id)
+      : sanitizeMagnet(record.magnetUri);
+
+    const handle = await this.engine.add(source, record.downloadPath, record.id);
 
     // Update total bytes once metadata arrives (might differ from search result).
     if (handle.length > 0) {
@@ -225,7 +233,12 @@ export class DownloadManager extends EventEmitter {
 
     this.engine.on(
       "metadata",
-      (id: string, name: string, totalBytes: number) => {
+      (id: string, name: string, totalBytes: number, torrentFile?: Buffer) => {
+        // Cache the .torrent file buffer to disk just like torlink does
+        if (torrentFile) {
+          void this.store.saveTorrentFile(id, torrentFile);
+        }
+
         void this.store.updateRecord(id, {
           title: name || undefined,
           totalBytes,

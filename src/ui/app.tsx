@@ -135,21 +135,51 @@ export function TorrentXApp({ engine, options, downloadManager }: AppProps) {
     };
     delete (searchOptions as SearchOptions & { mobile?: boolean }).mobile;
 
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let pendingProgress: typeof progress = null;
+
+    const throttledSetProgress = (next: typeof progress) => {
+      pendingProgress = next;
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        if (!controller.signal.aborted) {
+          setProgress(pendingProgress);
+        }
+      }, 150);
+    };
+
     void engine
       .search(activeQuery, searchOptions, (next) => {
-        if (!controller.signal.aborted) setProgress(next);
+        throttledSetProgress(next);
       })
       .then(async (report) => {
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
         if (controller.signal.aborted) return;
+        setProgress({
+          ...report,
+          completedSources: report.sources.length,
+          totalSources: report.sources.length,
+        } as SearchProgress);
         await new ResultStore().save(report.results).catch(() => undefined);
       })
       .catch((error: unknown) => {
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
         if (!controller.signal.aborted) {
           setNotice(error instanceof Error ? error.message : String(error));
         }
       });
 
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      if (timer) clearTimeout(timer);
+    };
   }, [activeQuery, category.mediaType, engine, options, searchVersion]);
 
   const submit = (raw: string) => {

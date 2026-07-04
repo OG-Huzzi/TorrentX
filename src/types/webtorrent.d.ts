@@ -25,6 +25,7 @@ declare module "webtorrent" {
     ready: boolean;
     destroyed: boolean;
     files: TorrentFile[];
+    torrentFile?: Buffer;
     pause(): void;
     resume(): void;
     destroy(opts?: { destroyStore?: boolean }, cb?: () => void): void;
@@ -42,8 +43,8 @@ declare module "webtorrent" {
 
   class WebTorrent extends EventEmitter {
     torrents: Torrent[];
-    add(magnetOrUrl: string, opts?: TorrentOptions, onTorrent?: OnTorrentCallback): Torrent;
-    add(magnetOrUrl: string, onTorrent?: OnTorrentCallback): Torrent;
+    add(magnetOrUrl: string | Buffer, opts?: TorrentOptions, onTorrent?: OnTorrentCallback): Torrent;
+    add(magnetOrUrl: string | Buffer, onTorrent?: OnTorrentCallback): Torrent;
     remove(torrent: Torrent | string, opts?: { destroyStore?: boolean }, cb?: () => void): void;
     destroy(cb?: () => void): void;
   }
