@@ -8,6 +8,7 @@ import { TorrentXApp } from "./app.js";
 export async function runInteractive(
   engine: SearchEngine,
   options: SearchOptions & { mobile?: boolean } = {},
+  initialTorrentOrMagnet?: string,
 ): Promise<void> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new Error("Interactive mode needs a TTY. Use `torrentx search <query>` instead.");
@@ -33,7 +34,7 @@ export async function runInteractive(
 
   try {
     app = render(
-      createElement(TorrentXApp, { engine, options, downloadManager }),
+      createElement(TorrentXApp, { engine, options, downloadManager, initialTorrentOrMagnet }),
       {
         exitOnCtrlC: false,
       patchConsole: true,

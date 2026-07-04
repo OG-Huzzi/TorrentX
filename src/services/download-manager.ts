@@ -65,10 +65,13 @@ export class DownloadManager extends EventEmitter {
 
   async startDownload(result: SearchResult): Promise<DownloadItem> {
     const magnet = actionableUri(result);
+    return this.startDownloadFromUri(magnet, result.title, result.source);
+  }
 
+  async startDownloadFromUri(uri: string, customTitle?: string, source?: string): Promise<DownloadItem> {
     // Prevent duplicate downloads: check if this magnet/infohash is already in the list
     const infoHashRegex = /xt=urn:btih:([a-fA-F0-9]{32,40})/i;
-    const match = magnet.match(infoHashRegex);
+    const match = uri.match(infoHashRegex);
     const incomingHash = match ? match[1]!.toLowerCase() : null;
 
     const existing = this.store.getAll().find((r) => {
@@ -76,23 +79,35 @@ export class DownloadManager extends EventEmitter {
         const rMatch = r.magnetUri.match(infoHashRegex);
         if (rMatch && rMatch[1]!.toLowerCase() === incomingHash) return true;
       }
-      return r.magnetUri === magnet;
+      return r.magnetUri === uri;
     });
 
     if (existing) {
       throw new Error("This torrent is already in your downloads list!");
     }
 
-    const id = stableHash(`dl-${magnet}-${Date.now()}`);
+    // Determine a title (fallback to file name or infoHash)
+    let title = customTitle || "Loading torrent...";
+    if (!customTitle) {
+      if (uri.startsWith("magnet:?")) {
+        const nameMatch = uri.match(/dn=([^&]+)/);
+        title = nameMatch ? decodeURIComponent(nameMatch[1]!) : (incomingHash || "Magnet link");
+      } else {
+        // It's a file path
+        title = uri.split(/[/\\]/).pop() || "Local torrent";
+      }
+    }
+
+    const id = stableHash(`dl-${uri}-${Date.now()}`);
     const record: DownloadRecord = {
       id,
-      magnetUri: magnet,
-      title: result.title,
-      source: result.source,
+      magnetUri: uri,
+      title,
+      source: source || (uri.startsWith("magnet:") ? "magnet" : "file"),
       downloadPath: this.downloadDir,
       status: "queued",
       addedAt: new Date().toISOString(),
-      totalBytes: result.sizeBytes ?? 0,
+      totalBytes: 0,
       downloadedBytes: 0,
     };
 

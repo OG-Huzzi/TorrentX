@@ -22,14 +22,19 @@ program
   .name("torrentx")
   .description("Fast, adaptive torrent meta-search for every terminal.")
   .version(VERSION)
+  .argument("[torrentOrMagnet]", "magnet link or path to a .torrent file to download on launch")
   .option("--mobile", "force compact Termux-style UI")
   .option("--no-cache", "skip cached search results")
   .option("--no-enrich", "disable metadata API enrichment")
-  .action(async (options: CliSearchOptions) => {
-    await runInteractive(engine, {
-      ...toSearchOptions(options),
-      ...(options.mobile === undefined ? {} : { mobile: options.mobile }),
-    });
+  .action(async (torrentOrMagnet: string | undefined, options: CliSearchOptions) => {
+    await runInteractive(
+      engine,
+      {
+        ...toSearchOptions(options),
+        ...(options.mobile === undefined ? {} : { mobile: options.mobile }),
+      },
+      torrentOrMagnet,
+    );
   });
 
 addSearchOptions(

@@ -28,6 +28,7 @@ interface AppProps {
   engine: SearchEngine;
   options: SearchOptions & { mobile?: boolean };
   downloadManager?: DownloadManager;
+  initialTorrentOrMagnet?: string | undefined;
 }
 
 interface Category {
@@ -48,7 +49,7 @@ const CATEGORIES: readonly Category[] = [
 type Screen = "splash" | "results" | "detail" | "downloads";
 type Action = "copy" | "open" | "export";
 
-export function TorrentXApp({ engine, options, downloadManager }: AppProps) {
+export function TorrentXApp({ engine, options, downloadManager, initialTorrentOrMagnet }: AppProps) {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const [size, setSize] = useState({
@@ -110,6 +111,20 @@ export function TorrentXApp({ engine, options, downloadManager }: AppProps) {
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
   }, [downloadManager]);
+
+  // Start initial torrent/magnet if passed on launch, matching torlink exactly.
+  useEffect(() => {
+    if (!initialTorrentOrMagnet || !downloadManager) return;
+    setActionBusy(true);
+    downloadManager
+      .startDownloadFromUri(initialTorrentOrMagnet)
+      .then(() => {
+        setNotice("Download started.");
+        setScreen("downloads");
+      })
+      .catch((err: Error) => setNotice(err.message))
+      .finally(() => setActionBusy(false));
+  }, [initialTorrentOrMagnet, downloadManager]);
 
   useEffect(() => {
     if (!results.length) {
