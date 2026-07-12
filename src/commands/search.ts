@@ -32,7 +32,7 @@ export function addSearchOptions(command: Command): Command {
     .option("-l, --language <language>", "language filter and search hint")
     .option("--min-seeds <number>", "minimum number of seeders")
     .option("--codec <codec>", "codec filter, for example x265")
-    .option("-n, --limit <number>", "maximum results", "30")
+    .option("-n, --limit <number>", "maximum results", "100")
     .option("--no-cache", "skip cached search results")
     .option("--no-enrich", "disable metadata API enrichment")
     .option("--mobile", "force compact Termux-style output")
@@ -71,7 +71,7 @@ export function toSearchOptions(
   const maxSizeBytes = parseCliSize(options.maxSize, "max-size");
 
   return {
-    limit: limit ?? 30,
+    limit: limit ?? 100,
     cache: options.cache !== false,
     enrich: options.enrich !== false,
     ...optional("quality", options.fourK ? "2160p" : options.quality),

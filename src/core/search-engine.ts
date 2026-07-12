@@ -45,7 +45,7 @@ export class SearchEngine {
       ...(options.mediaType ? { mediaType: options.mediaType } : {}),
       ...(options.language ? { language: options.language } : {}),
     });
-    const limit = Math.max(1, Math.min(options.limit ?? 30, 100));
+    const limit = Math.max(1, Math.min(options.limit ?? 100, 100));
     const cacheKey = JSON.stringify({ query: intent.query, intent, options: cacheableOptions(options), limit });
 
     if (options.cache !== false) {
