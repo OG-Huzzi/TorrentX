@@ -5,3 +5,5 @@ coverage/
 *.log
 .env
 .DS_Store
+tmp/
+temp/

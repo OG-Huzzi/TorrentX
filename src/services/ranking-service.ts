@@ -90,19 +90,38 @@ function languageScore(result: SearchResult, intent: SearchIntent): number {
   const resultLang = result.language?.toLowerCase();
 
   // Check if the result matches the wanted language
-  const matchesWanted =
-    resultLang === wantedLang ||
-    titleLower.includes(wantedLang);
-
-  if (matchesWanted) return 12;
+  if (matchesLanguage(titleLower, resultLang, wantedLang)) {
+    return 12;
+  }
 
   // Check if the result is in a DIFFERENT Indian language than the one wanted
   if (INDIAN_LANGUAGES.includes(wantedLang)) {
     const hasOtherIndianLang = INDIAN_LANGUAGES.some(
-      (lang) => lang !== wantedLang && (resultLang === lang || titleLower.includes(lang)),
+      (lang) => lang !== wantedLang && matchesLanguage(titleLower, resultLang, lang),
     );
     if (hasOtherIndianLang) return -10;
   }
 
   return 0;
+}
+
+function matchesLanguage(titleLower: string, resultLang: string | undefined, lang: string): boolean {
+  if (resultLang === lang) return true;
+  if (titleLower.includes(lang)) return true;
+
+  const abbrev: Record<string, string> = {
+    hindi: "hin",
+    tamil: "tam",
+    telugu: "tel",
+    malayalam: "mal",
+    kannada: "kan",
+    bengali: "ben",
+    punjabi: "pun",
+    english: "eng",
+  };
+  const short = abbrev[lang];
+  if (short && new RegExp(`\\b${short}\\b`).test(titleLower)) {
+    return true;
+  }
+  return false;
 }

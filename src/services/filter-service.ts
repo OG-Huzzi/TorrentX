@@ -20,13 +20,6 @@ export function applyFilters(results: SearchResult[], filters: SearchFilters): S
     if (filters.maxSizeBytes !== undefined && (result.sizeBytes ?? Infinity) > filters.maxSizeBytes) {
       return false;
     }
-    if (
-      filters.language &&
-      result.language &&
-      result.language.toLowerCase() !== filters.language.toLowerCase()
-    ) {
-      return false;
-    }
     if (filters.minSeeders !== undefined && result.seeders < filters.minSeeders) {
       return false;
     }

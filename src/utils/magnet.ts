@@ -44,5 +44,24 @@ export function sanitizeMagnet(uri: string): string {
     sanitized = sanitized.replace(match[1], match[1].toLowerCase());
   }
 
+  // Merge default trackers if it is a magnet link to boost peer discovery without discarding original trackers.
+  if (sanitized.startsWith("magnet:?")) {
+    const existing = new Set<string>();
+    const trMatches = sanitized.match(/tr=[^&]+/g);
+    if (trMatches) {
+      for (const m of trMatches) {
+        try {
+          existing.add(decodeURIComponent(m.slice(3)).toLowerCase());
+        } catch {}
+      }
+    }
+
+    for (const tracker of MAGNET_TRACKERS) {
+      if (!existing.has(tracker.toLowerCase())) {
+        sanitized += `&tr=${encodeURIComponent(tracker)}`;
+      }
+    }
+  }
+
   return sanitized;
 }

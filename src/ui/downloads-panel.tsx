@@ -211,7 +211,7 @@ function DownloadRow({
   const color = STATUS_COLOR[item.status];
   const prog = item.liveProgress;
   const progress = prog?.progress ?? (item.totalBytes > 0 ? item.downloadedBytes / item.totalBytes : 0);
-  const titleMax = Math.max(10, width - 30);
+  const titleMax = Math.max(10, width - 48);
   const hasError = !!item.errorMessage;
 
   if (compact) {
@@ -227,7 +227,7 @@ function DownloadRow({
         <Box paddingLeft={4}>
           <ProgressBar progress={progress} width={Math.max(8, barWidth - 4)} />
           {prog ? (
-            <Text dimColor>{`  ${formatSpeed(prog.downloadSpeed)}  ${formatEta(prog.eta)}`}</Text>
+            <Text dimColor>{`  ${formatSpeed(prog.downloadSpeed)}  ${formatEta(prog.eta)}  (${prog.peers} peers)`}</Text>
           ) : null}
         </Box>
         {hasError ? (
@@ -266,17 +266,20 @@ function DownloadRow({
         </Box>
         {prog ? (
           <>
-            <Box width={10}>
+            <Box width={12}>
               <Text color={TUI_COLOR.accent}>
                 {formatSpeed(prog.downloadSpeed)}
               </Text>
+            </Box>
+            <Box width={10}>
+              <Text dimColor>{`${prog.peers} peers`}</Text>
             </Box>
             <Box width={8}>
               <Text dimColor>{formatEta(prog.eta)}</Text>
             </Box>
           </>
         ) : (
-          <Box width={18}>
+          <Box width={30}>
             {hasError ? (
               <Text color={TUI_COLOR.bad}>{item.status} !</Text>
             ) : (

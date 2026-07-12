@@ -85,10 +85,6 @@ export class DownloadEngine extends EventEmitter {
     try {
       torrent = client.add(magnetOrTorrentPath, {
         path: downloadPath,
-        announce: DEFAULT_TRACKERS,
-        maxWebConns: 10,
-        storeCacheSlots: 50,
-        strategy: "sequential",
       });
     } catch (err) {
       throw err;

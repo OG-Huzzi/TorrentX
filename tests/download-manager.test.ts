@@ -58,7 +58,7 @@ describe("DownloadManager", () => {
     const item = await manager.startDownload(result);
     expect(item.title).toBe("Test Result");
     expect(["queued", "downloading"]).toContain(item.status);
-    expect(item.magnetUri).toBe(result.magnetUri);
+    expect(item.magnetUri).toContain(result.magnetUri);
 
     const downloads = manager.getDownloads();
     expect(downloads.length).toBeGreaterThanOrEqual(1);
