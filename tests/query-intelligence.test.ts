@@ -17,6 +17,8 @@ describe("inferSearchIntent", () => {
     expect(intent.region).toBe("india");
     expect(intent.language).toBe("hindi");
     expect(intent.preferredSources).toContain("piratebay");
+    expect(intent.preferredSources).toContain("1337x");
+    expect(intent.preferredSources).toContain("torrentgalaxy");
   });
 
   it("recognizes Korean drama", () => {

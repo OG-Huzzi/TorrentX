@@ -1,10 +1,18 @@
 declare module "webtorrent" {
   import { EventEmitter } from "node:events";
 
+  interface WebTorrentOptions {
+    maxConns?: number;
+    [key: string]: unknown;
+  }
+
   interface TorrentOptions {
     path?: string;
     announce?: string[];
     destroyStoreOnDestroy?: boolean;
+    maxWebConns?: number;
+    storeCacheSlots?: number;
+    strategy?: "sequential" | "rarest";
     [key: string]: unknown;
   }
 
@@ -43,6 +51,7 @@ declare module "webtorrent" {
 
   class WebTorrent extends EventEmitter {
     torrents: Torrent[];
+    constructor(opts?: WebTorrentOptions);
     add(magnetOrUrl: string | Buffer, opts?: TorrentOptions, onTorrent?: OnTorrentCallback): Torrent;
     add(magnetOrUrl: string | Buffer, onTorrent?: OnTorrentCallback): Torrent;
     remove(torrent: Torrent | string, opts?: { destroyStore?: boolean }, cb?: () => void): void;
@@ -50,5 +59,5 @@ declare module "webtorrent" {
   }
 
   export default WebTorrent;
-  export { Torrent, TorrentFile, TorrentOptions, OnTorrentCallback };
+  export { Torrent, TorrentFile, TorrentOptions, OnTorrentCallback, WebTorrentOptions };
 }

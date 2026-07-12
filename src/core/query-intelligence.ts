@@ -86,7 +86,7 @@ export function inferSearchIntent(
   if (mediaType === "movie") preferredSources.push("yts");
   if (mediaType === "tv") preferredSources.push("eztv");
   if (mediaType === "game") preferredSources.push("fitgirl");
-  if (region === "india") preferredSources.push("piratebay");
+  if (region === "india") preferredSources.push("1337x", "torrentgalaxy", "piratebay");
 
   return {
     query: queryTerms.join(" ").trim() || rawQuery.trim(),

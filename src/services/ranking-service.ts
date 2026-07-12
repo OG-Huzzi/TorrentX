@@ -8,6 +8,13 @@ const QUALITY_SCORE: Record<string, number> = {
   "480p": 1,
 };
 
+/**
+ * Indian language keywords used for language-aware ranking.
+ * When the user searches for "hindi", results with "Tamil" or "Telugu"
+ * in the title are deprioritized.
+ */
+const INDIAN_LANGUAGES = ["hindi", "tamil", "telugu", "malayalam", "kannada", "bengali", "punjabi"];
+
 export function scoreResult(result: SearchResult, intent: SearchIntent): number {
   const seedScore = Math.log10(Math.max(0, result.seeders) + 1) * 18;
   const peerHealth =
@@ -23,6 +30,7 @@ export function scoreResult(result: SearchResult, intent: SearchIntent): number 
   const deadPenalty = result.seeders === 0 ? -25 : 0;
   const suspiciousPenalty = isSuspicious(result.title) ? -20 : 0;
   const freshness = freshnessScore(result.uploadedAt);
+  const langScore = languageScore(result, intent);
 
   return Number(
     (
@@ -36,7 +44,8 @@ export function scoreResult(result: SearchResult, intent: SearchIntent): number 
       trusted +
       freshness +
       deadPenalty +
-      suspiciousPenalty
+      suspiciousPenalty +
+      langScore
     ).toFixed(2),
   );
 }
@@ -60,4 +69,40 @@ function freshnessScore(uploadedAt?: string): number {
 
 function isSuspicious(title: string): boolean {
   return /\.(exe|scr|bat)\b/i.test(title) || /\b(password|crack only|keygen only)\b/i.test(title);
+}
+
+/**
+ * Score a result based on language match with the user's search intent.
+ *
+ * When the user searches for "hindi" content:
+ *   +12 if the result title or language contains "Hindi"
+ *   -10 if the result title contains another Indian language (Tamil/Telugu etc.)
+ *        but NOT the requested language
+ *
+ * This directly solves the problem of Tamil/Telugu results appearing above
+ * Hindi results when the user specifically wants Hindi.
+ */
+function languageScore(result: SearchResult, intent: SearchIntent): number {
+  const wantedLang = intent.language?.toLowerCase();
+  if (!wantedLang) return 0;
+
+  const titleLower = result.title.toLowerCase();
+  const resultLang = result.language?.toLowerCase();
+
+  // Check if the result matches the wanted language
+  const matchesWanted =
+    resultLang === wantedLang ||
+    titleLower.includes(wantedLang);
+
+  if (matchesWanted) return 12;
+
+  // Check if the result is in a DIFFERENT Indian language than the one wanted
+  if (INDIAN_LANGUAGES.includes(wantedLang)) {
+    const hasOtherIndianLang = INDIAN_LANGUAGES.some(
+      (lang) => lang !== wantedLang && (resultLang === lang || titleLower.includes(lang)),
+    );
+    if (hasOtherIndianLang) return -10;
+  }
+
+  return 0;
 }
