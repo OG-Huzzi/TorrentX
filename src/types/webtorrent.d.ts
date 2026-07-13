@@ -3,6 +3,16 @@ declare module "webtorrent" {
 
   interface WebTorrentOptions {
     maxConns?: number;
+    dht?: boolean | Record<string, unknown>;
+    tracker?: boolean | Record<string, unknown>;
+    lsd?: boolean;
+    utPex?: boolean;
+    natUpnp?: boolean;
+    natPmp?: boolean;
+    utp?: boolean;
+    seedOutgoingConnections?: boolean;
+    downloadLimit?: number;
+    uploadLimit?: number;
     [key: string]: unknown;
   }
 

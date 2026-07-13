@@ -3,33 +3,7 @@ import { mkdir } from "node:fs/promises";
 import type WebTorrent from "webtorrent";
 import type { Torrent } from "webtorrent";
 import type { DownloadProgress } from "../types/download.js";
-
-/**
- * Expanded tracker list injected into all added torrents for aggressive peer
- * discovery. Curated from the most reliable public trackers worldwide.
- */
-const DEFAULT_TRACKERS = [
-  "udp://tracker.opentrackr.org:1337/announce",
-  "udp://open.stealth.si:80/announce",
-  "udp://tracker.torrent.eu.org:451/announce",
-  "udp://open.demonii.com:1337/announce",
-  "udp://exodus.desync.com:6969/announce",
-  "udp://tracker.openbittorrent.com:6969/announce",
-  "udp://tracker.tiny-vps.com:6969/announce",
-  "udp://tracker.moeking.me:6969/announce",
-  "udp://p4p.arenabg.com:1337/announce",
-  "udp://explodie.org:6969/announce",
-  "udp://tracker.dler.org:6969/announce",
-  "udp://opentracker.i2p.rocks:6969/announce",
-  "udp://47.ip-51-68-199.eu:6969/announce",
-  "udp://tracker.internetwarriors.net:1337/announce",
-  "udp://tracker.leechers-paradise.org:6969/announce",
-  "udp://tracker.coppersurfer.tk:6969/announce",
-  "udp://tracker.pirateparty.gr:6969/announce",
-  "wss://tracker.openwebtorrent.com",
-  "wss://tracker.btorrent.xyz",
-  "wss://tracker.webtorrent.dev",
-];
+import { torrentAddOptions, webTorrentClientOptions } from "./download-tuning.js";
 
 export interface TorrentHandle {
   infoHash: string;
@@ -65,7 +39,7 @@ export class DownloadEngine extends EventEmitter {
   private async ensureClient(): Promise<WebTorrent> {
     if (this.client) return this.client;
     const WTConstructor = (await import("webtorrent")).default;
-    this.client = new WTConstructor({ maxConns: 100 });
+    this.client = new WTConstructor(webTorrentClientOptions());
     this.client.on("error", (err: Error) => {
       this.emit("error", "client", err);
     });
@@ -83,9 +57,7 @@ export class DownloadEngine extends EventEmitter {
 
     let torrent: Torrent;
     try {
-      torrent = client.add(magnetOrTorrentPath, {
-        path: downloadPath,
-      });
+      torrent = client.add(magnetOrTorrentPath, torrentAddOptions(downloadPath));
     } catch (err) {
       throw err;
     }
