@@ -8,7 +8,10 @@ export function createConfig(overrides: Partial<TorrentXConfig> = {}): TorrentXC
     metadataLimit: 5,
     tmdbApiKey: process.env.TMDB_API_KEY,
     omdbApiKey: process.env.OMDB_API_KEY,
-    userAgent: "TorrentX/0.1 (+https://github.com/torrentx/torrentx)",
+    userAgent:
+      process.env.TORRENTX_USER_AGENT ??
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+    sourceProxyUrl: process.env.TORRENTX_SOURCE_PROXY || undefined,
     downloadDir: process.env.TORRENTX_DOWNLOAD_DIR || undefined,
     ...overrides,
   };

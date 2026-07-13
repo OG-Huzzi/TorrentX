@@ -88,12 +88,22 @@ export interface SourceAdapter {
   search(request: SearchRequest): Promise<SearchResult[]>;
 }
 
+export type SourceFailureKind =
+  | "blocked"
+  | "cancelled"
+  | "invalid_response"
+  | "network"
+  | "rate_limited"
+  | "timeout"
+  | "unavailable";
+
 export interface SourceRun {
   source: string;
   durationMs: number;
   resultCount: number;
   cached: boolean;
   error?: string;
+  failureKind?: SourceFailureKind;
 }
 
 export interface SearchReport {

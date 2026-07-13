@@ -1,6 +1,6 @@
 import type { SearchRequest, SourceAdapter } from "../types/search.js";
 import type { HttpClient } from "../services/http-client.js";
-import { createResult } from "./source-utils.js";
+import { createResult, raceMirrors } from "./source-utils.js";
 
 /**
  * 1337x adapter — HTML scraping based.
@@ -35,25 +35,20 @@ export class Leet1337xAdapter implements SourceAdapter {
   constructor(private readonly http: HttpClient) {}
 
   async search(request: SearchRequest) {
-    let lastError: Error | undefined;
-
-    for (const domain of DOMAINS) {
-      try {
+    return raceMirrors(
+      DOMAINS,
+      async (domain, signal) => {
         const url = `https://${domain}/search/${encodeURIComponent(request.intent.query)}/1/`;
-        const html = await this.http.text(url, request.signal);
+        const html = await this.http.text(url, signal);
         const rows = this.parseSearchPage(html);
         if (rows.length === 0) return [];
 
         // Fetch detail pages in parallel to extract magnet links (limit concurrency).
         const top = rows.slice(0, Math.min(request.limit, 15));
-        const results = await this.fetchMagnets(domain, top, request.signal);
-        return results;
-      } catch (err) {
-        lastError = err as Error;
-      }
-    }
-
-    throw lastError || new Error("All 1337x mirrors offline");
+        return this.fetchMagnets(domain, top, signal);
+      },
+      request.signal,
+    );
   }
 
   /**

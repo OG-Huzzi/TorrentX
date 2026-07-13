@@ -1,6 +1,6 @@
 import type { SearchRequest, SourceAdapter } from "../types/search.js";
 import type { HttpClient } from "../services/http-client.js";
-import { createResult } from "./source-utils.js";
+import { createResult, raceMirrors } from "./source-utils.js";
 
 /**
  * TorrentGalaxy adapter — single-step HTML scraping.
@@ -22,19 +22,15 @@ export class TorrentGalaxyAdapter implements SourceAdapter {
   constructor(private readonly http: HttpClient) {}
 
   async search(request: SearchRequest) {
-    let lastError: Error | undefined;
-
-    for (const domain of DOMAINS) {
-      try {
+    return raceMirrors(
+      DOMAINS,
+      async (domain, signal) => {
         const url = `https://${domain}/torrents.php?search=${encodeURIComponent(request.intent.query)}&sort=seeders&order=desc`;
-        const html = await this.http.text(url, request.signal);
+        const html = await this.http.text(url, signal);
         return this.parseResults(html, domain, request.limit);
-      } catch (err) {
-        lastError = err as Error;
-      }
-    }
-
-    throw lastError || new Error("All TorrentGalaxy mirrors offline");
+      },
+      request.signal,
+    );
   }
 
   private parseResults(html: string, domain: string, limit: number) {

@@ -1,6 +1,6 @@
 import type { SearchRequest, SourceAdapter } from "../types/search.js";
 import type { HttpClient } from "../services/http-client.js";
-import { createResult } from "./source-utils.js";
+import { createResult, raceMirrors } from "./source-utils.js";
 
 interface EztvResponse {
   torrents?: Array<{
@@ -18,7 +18,7 @@ interface EztvResponse {
   }>;
 }
 
-const EZTV_DOMAINS = ["eztvx.to", "eztv1.xyz", "eztv.wf", "eztv.tf", "eztv.yt"];
+const EZTV_DOMAINS = ["eztv.re", "eztvx.to", "eztv1.xyz", "eztv.wf", "eztv.tf", "eztv.yt"];
 
 export class EztvAdapter implements SourceAdapter {
   readonly id = "eztv";
@@ -33,12 +33,12 @@ export class EztvAdapter implements SourceAdapter {
     if (request.intent.mediaType && request.intent.mediaType !== "tv") return [];
     const queryWords = request.intent.query.toLowerCase().split(/\s+/);
 
-    let lastError: Error | undefined;
-    for (const domain of EZTV_DOMAINS) {
-      try {
+    return raceMirrors(
+      EZTV_DOMAINS,
+      async (domain, signal) => {
         const payload = await this.http.json<EztvResponse>(
           `https://${domain}/api/get-torrents?limit=100&page=1`,
-          request.signal,
+          signal,
         );
 
         return (payload.torrents ?? [])
@@ -60,11 +60,8 @@ export class EztvAdapter implements SourceAdapter {
               trusted: true,
             }),
           );
-      } catch (err) {
-        lastError = err as Error;
-      }
-    }
-
-    throw lastError || new Error("All EZTV mirrors offline");
+      },
+      request.signal,
+    );
   }
 }

@@ -13,6 +13,7 @@ import { dedupeResults } from "../services/dedupe-service.js";
 import { applyFilters } from "../services/filter-service.js";
 import { MetadataService } from "../services/metadata-service.js";
 import { rankResults } from "../services/ranking-service.js";
+import { describeSourceFailure } from "../services/source-failure.js";
 import { inferSearchIntent } from "./query-intelligence.js";
 
 interface CachedSearch {
@@ -154,7 +155,11 @@ export class SearchEngine {
   ): Promise<{ results: SearchResult[]; report: SourceRun }> {
     const startedAt = Date.now();
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
     const abort = () => controller.abort();
     signal?.addEventListener("abort", abort, { once: true });
 
@@ -170,6 +175,7 @@ export class SearchEngine {
         },
       };
     } catch (error) {
+      const failure = describeSourceFailure(error, timedOut);
       return {
         results: [],
         report: {
@@ -177,7 +183,8 @@ export class SearchEngine {
           durationMs: Date.now() - startedAt,
           resultCount: 0,
           cached: false,
-          error: error instanceof Error ? error.message : String(error),
+          error: failure.message,
+          failureKind: failure.kind,
         },
       };
     } finally {

@@ -61,6 +61,7 @@ describe("SearchEngine", () => {
     expect(report.results).toHaveLength(1);
     expect(report.results[0]?.title).toContain("1080p");
     expect(report.sources.find((source) => source.source === "broken")?.error).toBe("offline");
+    expect(report.sources.find((source) => source.source === "broken")?.failureKind).toBe("network");
   });
 
   it("publishes partial ranked results as sources finish", async () => {

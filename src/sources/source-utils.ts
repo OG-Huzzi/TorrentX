@@ -45,6 +45,84 @@ export function createResult(input: {
   };
 }
 
+export interface MirrorRaceOptions {
+  staggerMs?: number;
+}
+
+/**
+ * Start mirror requests a short time apart and use the first completed one.
+ * This prevents a single blackholed domain from consuming the full source
+ * timeout before the remaining mirrors are ever tried.
+ */
+export async function raceMirrors<T>(
+  domains: readonly string[],
+  request: (domain: string, signal: AbortSignal) => Promise<T>,
+  signal?: AbortSignal,
+  options: MirrorRaceOptions = {},
+): Promise<T> {
+  if (domains.length === 0) {
+    throw new Error("At least one source mirror is required");
+  }
+
+  const controller = new AbortController();
+  const relayAbort = () => controller.abort();
+  if (signal?.aborted) relayAbort();
+  else signal?.addEventListener("abort", relayAbort, { once: true });
+
+  const staggerMs = options.staggerMs ?? 250;
+  try {
+    return await Promise.any(
+      domains.map((domain, index) =>
+        waitFor(index * staggerMs, controller.signal).then(() =>
+          request(domain, controller.signal),
+        ),
+      ),
+    );
+  } catch (error) {
+    if (signal?.aborted) throw createAbortError();
+
+    const errors = error instanceof AggregateError ? error.errors : [error];
+    throw (
+      errors.find((candidate) => !isAbortError(candidate)) ??
+      errors.at(-1) ??
+      new Error("No source mirror responded")
+    );
+  } finally {
+    controller.abort();
+    signal?.removeEventListener("abort", relayAbort);
+  }
+}
+
+function waitFor(milliseconds: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.reject(createAbortError());
+  if (milliseconds <= 0) return Promise.resolve();
+
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, milliseconds);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(createAbortError());
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name?: unknown }).name === "AbortError"
+  );
+}
+
+function createAbortError(): DOMException {
+  return new DOMException("The operation was aborted", "AbortError");
+}
+
 function optional<K extends string, V>(
   key: K,
   value: V | undefined,

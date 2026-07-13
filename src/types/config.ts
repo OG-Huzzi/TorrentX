@@ -6,5 +6,6 @@ export interface TorrentXConfig {
   tmdbApiKey: string | undefined;
   omdbApiKey: string | undefined;
   userAgent: string;
+  sourceProxyUrl?: string | undefined;
   downloadDir?: string | undefined;
 }

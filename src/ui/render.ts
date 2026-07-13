@@ -1,5 +1,6 @@
 import Table from "cli-table3";
 import type { SearchReport, SearchResult } from "../types/search.js";
+import { sourceFailureLabel } from "../services/source-failure.js";
 import { formatSize } from "../utils/size.js";
 import { truncate } from "../utils/text.js";
 import { theme } from "./theme.js";
@@ -108,7 +109,7 @@ function renderFooter(report: SearchReport): void {
   if (failed.length) {
     console.log(
       theme.muted(
-        `Unavailable: ${failed.map((source) => `${source.source} (${source.error})`).join(", ")}`,
+        `Unavailable: ${failed.map((source) => `${source.source} (${sourceFailureLabel(source)}: ${source.error})`).join(", ")}`,
       ),
     );
   }

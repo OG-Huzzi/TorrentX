@@ -95,8 +95,10 @@ torrentx dl --json
 
 ## Troubleshooting
 
-### 1. Connection Errors or "offline" search status (ISP Blocks)
-In many regions, ISPs block public torrent search endpoints at the network level. If your search statuses are failing or offline, you can bypass simple ISP DNS blocks by changing your DNS settings to Cloudflare (1.1.1.1).
+### 1. Source timeouts or blocked statuses
+TorrentX races its mirror domains and shows the real reason a source failed: `timeout`, `blocked`, `limited`, `changed`, or `unreachable`. A timeout across every mirror usually means the network is blocking or blackholing that site's traffic; it is not a parser failure inside TorrentX.
+
+In many regions, ISPs block public torrent search endpoints at the network level. For simple DNS blocks, changing DNS settings to Cloudflare (1.1.1.1) can help:
 
 #### How to set Cloudflare DNS (Windows PowerShell as Admin):
 ```powershell
@@ -108,6 +110,13 @@ Set-DnsClientServerAddress -InterfaceAlias "Wi-Fi" -ServerAddresses ("1.1.1.1","
 
 # 3. Flush the DNS resolver cache
 ipconfig /flushdns
+```
+
+If your network still blocks a source, TorrentX can route source requests through a compatible proxy that you run or explicitly trust. There is no built-in proxy, so searches are never sent to a third party by default. Set `TORRENTX_SOURCE_PROXY` to a URL template containing `{url}`:
+
+```powershell
+$env:TORRENTX_SOURCE_PROXY = "https://proxy.example/fetch?target={url}"
+npx torrentx
 ```
 
 #### How to restore/unset DNS back to default:

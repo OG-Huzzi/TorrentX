@@ -2,7 +2,7 @@ import type { SearchRequest, SourceAdapter } from "../types/search.js";
 import type { HttpClient } from "../services/http-client.js";
 import { buildMagnet } from "../utils/magnet.js";
 import { parseSize } from "../utils/size.js";
-import { createResult } from "./source-utils.js";
+import { createResult, raceMirrors } from "./source-utils.js";
 
 const DOMAINS = ["www.limetorrents.lol", "www.limetorrents.pro", "limetorrents.cc"];
 
@@ -28,19 +28,15 @@ export class LimeTorrentsAdapter implements SourceAdapter {
   constructor(private readonly http: HttpClient) {}
 
   async search(request: SearchRequest) {
-    let lastError: Error | undefined;
-
-    for (const domain of DOMAINS) {
-      try {
+    return raceMirrors(
+      DOMAINS,
+      async (domain, signal) => {
         const url = `https://${domain}/search/all/${encodeURIComponent(request.intent.query)}/seeds/1/`;
-        const html = await this.http.text(url, request.signal);
+        const html = await this.http.text(url, signal);
         return this.parseResults(html, domain, request.limit);
-      } catch (err) {
-        lastError = err as Error;
-      }
-    }
-
-    throw lastError || new Error("All LimeTorrents mirrors offline");
+      },
+      request.signal,
+    );
   }
 
   private parseResults(html: string, domain: string, limit: number) {

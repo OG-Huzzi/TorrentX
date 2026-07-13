@@ -1,6 +1,6 @@
 import type { SearchRequest, SourceAdapter } from "../types/search.js";
 import type { HttpClient } from "../services/http-client.js";
-import { createResult } from "./source-utils.js";
+import { createResult, raceMirrors } from "./source-utils.js";
 
 interface YtsResponse {
   data?: {
@@ -23,7 +23,7 @@ interface YtsResponse {
   };
 }
 
-const YTS_DOMAINS = ["yts.mx", "yts.pm", "yts.lt", "yts.do", "yts.rs"];
+const YTS_DOMAINS = ["yts.am", "yts.mx", "yts.pm", "yts.lt", "yts.do", "yts.rs"];
 
 export class YtsAdapter implements SourceAdapter {
   readonly id = "yts";
@@ -37,15 +37,15 @@ export class YtsAdapter implements SourceAdapter {
   async search(request: SearchRequest) {
     if (request.intent.mediaType && request.intent.mediaType !== "movie") return [];
 
-    let lastError: Error | undefined;
-    for (const domain of YTS_DOMAINS) {
-      try {
+    return raceMirrors(
+      YTS_DOMAINS,
+      async (domain, signal) => {
         const url = new URL(`https://${domain}/api/v2/list_movies.json`);
         url.searchParams.set("query_term", request.intent.query);
         url.searchParams.set("limit", String(Math.min(request.limit, 50)));
         url.searchParams.set("sort_by", "seeds");
 
-        const payload = await this.http.json<YtsResponse>(url.toString(), request.signal);
+        const payload = await this.http.json<YtsResponse>(url.toString(), signal);
         return (payload.data?.movies ?? []).flatMap((movie) =>
           (movie.torrents ?? []).map((torrent) =>
             createResult({
@@ -66,11 +66,8 @@ export class YtsAdapter implements SourceAdapter {
             }),
           ),
         );
-      } catch (err) {
-        lastError = err as Error;
-      }
-    }
-
-    throw lastError || new Error("All YTS mirrors offline");
+      },
+      request.signal,
+    );
   }
 }

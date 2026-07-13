@@ -4,6 +4,7 @@ import type { SearchEngine } from "../core/search-engine.js";
 import type { DownloadManager } from "../services/download-manager.js";
 import { MagnetActions } from "../services/magnet-actions.js";
 import { ResultStore } from "../services/result-store.js";
+import { sourceFailureLabel } from "../services/source-failure.js";
 import type {
   MediaType,
   SearchOptions,
@@ -574,7 +575,7 @@ const SourceStatus = memo(function SourceStatus({
               {index ? <Text dimColor>   </Text> : null}
               <Text color={color}>{marker}</Text>
               <Text color={sourceColor(source)}>{` ${sourceTag(source)}`}</Text>
-              {run ? <Text dimColor>{run.error ? " offline" : ` ${run.resultCount}`}</Text> : null}
+              {run ? <Text dimColor>{` ${sourceFailureLabel(run)}`}</Text> : null}
             </Text>
           );
         })}
