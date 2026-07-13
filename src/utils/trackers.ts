@@ -1,4 +1,26 @@
+/**
+ * Curated public trackers ordered for maximum compatibility:
+ *
+ * 1. HTTP/HTTPS — work through any firewall/NAT, most reliable
+ * 2. WSS — WebSocket trackers for WebRTC peer exchange
+ * 3. UDP — fastest when unblocked, but firewalls often drop responses
+ */
 export const PUBLIC_TRACKERS = [
+  // ---- HTTP/HTTPS (firewall-friendly, highest priority) ----
+  "http://tracker.opentrackr.org:1337/announce",
+  "https://tracker.tamersunion.org:443/announce",
+  "https://tracker.lilithraws.org:443/announce",
+  "http://tracker.openbittorrent.com:80/announce",
+  "http://tracker.files.fm:6969/announce",
+  "http://tracker1.bt.moack.co.kr:80/announce",
+  "http://tracker.mywaifu.best:6969/announce",
+
+  // ---- WebSocket (WebRTC peer exchange) ----
+  "wss://tracker.openwebtorrent.com",
+  "wss://tracker.btorrent.xyz",
+  "wss://tracker.webtorrent.dev",
+
+  // ---- UDP (fastest when unblocked) ----
   "udp://tracker.opentrackr.org:1337/announce",
   "udp://open.stealth.si:80/announce",
   "udp://tracker.torrent.eu.org:451/announce",
@@ -7,18 +29,9 @@ export const PUBLIC_TRACKERS = [
   "udp://tracker.openbittorrent.com:6969/announce",
   "udp://tracker.tiny-vps.com:6969/announce",
   "udp://tracker.moeking.me:6969/announce",
-  "udp://p4p.arenabg.com:1337/announce",
   "udp://explodie.org:6969/announce",
   "udp://tracker.dler.org:6969/announce",
   "udp://opentracker.i2p.rocks:6969/announce",
-  "udp://47.ip-51-68-199.eu:6969/announce",
-  "udp://tracker.internetwarriors.net:1337/announce",
-  "udp://tracker.leechers-paradise.org:6969/announce",
-  "udp://tracker.coppersurfer.tk:6969/announce",
-  "udp://tracker.pirateparty.gr:6969/announce",
-  "wss://tracker.openwebtorrent.com",
-  "wss://tracker.btorrent.xyz",
-  "wss://tracker.webtorrent.dev",
 ];
 
 export function parseTrackerList(value?: string): string[] {
