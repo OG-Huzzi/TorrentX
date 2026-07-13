@@ -1,6 +1,6 @@
 {
   "name": "torrentx",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Fast, adaptive torrent meta-search for every terminal.",
   "type": "module",
   "bin": {
