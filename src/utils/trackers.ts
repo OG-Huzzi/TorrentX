@@ -4,8 +4,6 @@
  * 1. HTTP/HTTPS — work through any firewall/NAT, most reliable
  * 2. WSS — WebSocket trackers for WebRTC peer exchange
  * 3. UDP — fastest when unblocked, but firewalls often drop responses
- *
- * Expanded list for maximum peer discovery across all torrent types.
  */
 export const PUBLIC_TRACKERS = [
   // ---- HTTP/HTTPS (firewall-friendly, highest priority) ----
@@ -19,7 +17,6 @@ export const PUBLIC_TRACKERS = [
   "https://tracker1.520.jp:443/announce",
   "http://tracker.bt4g.com:2095/announce",
   "https://tracker.imgoingto.icu:443/announce",
-  "http://tracker.zer0day.to:1337/announce",
   "https://tracker.renfei.net:443/announce",
   "http://tracker.edkj.club:6969/announce",
   "https://tracker.parrotlinux.org:443/announce",
@@ -43,20 +40,14 @@ export const PUBLIC_TRACKERS = [
   "udp://explodie.org:6969/announce",
   "udp://tracker.dler.org:6969/announce",
   "udp://opentracker.i2p.rocks:6969/announce",
-  "udp://tracker.0x.tf:6969/announce",
   "udp://tracker.altrosky.nl:6969/announce",
   "udp://tracker.beeimg.com:6969/announce",
-  "udp://tracker.coppersurfer.tk:6969/announce",
-  "udp://tracker.internetwarriors.net:1337/announce",
   "udp://tracker.leech.ie:1337/announce",
   "udp://tracker.pomf.se:80/announce",
   "udp://tracker.sylphix.com:6969/announce",
   "udp://tracker.theoks.net:6969/announce",
-  "udp://tracker.tiny-vps.com:6969/announce",
-  "udp://tracker1.myporn.club:9337/announce",
   "udp://tracker2.dler.org:80/announce",
   "udp://tracker4.itzmx.com:2710/announce",
-  "udp://vibe.sleepyinternetfun.xyz:1738/announce",
   "udp://www.torrent.eu.org:451/announce",
 ];
 

@@ -24,6 +24,8 @@ const SOURCE_DOMAINS = [
   "1337x.st",
   "torrentgalaxy.to",
   "www.limetorrents.lol",
+  // Anime
+  "subsplease.org",
   // Fallback
   "fmhy.xyz",
 ];
