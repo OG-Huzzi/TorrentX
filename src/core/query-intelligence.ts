@@ -98,6 +98,59 @@ export function inferSearchIntent(
   };
 }
 
+/**
+ * Generate alternate query forms for when initial results are sparse.
+ * Strips quality/codec tags, expands abbreviations, and simplifies the query
+ * to maximize the chance of finding matching torrents.
+ */
+export function expandQuery(intent: SearchIntent): string[] {
+  const alternatives: string[] = [];
+  const base = intent.query;
+
+  // Strategy 1: Strip quality/codec tags (most common cause of zero results)
+  const stripped = base
+    .replace(/\b(2160p|1080p|1080i|720p|480p|4k|uhd|hdr)\b/gi, "")
+    .replace(/\b(x265|h265|hevc|x264|h264|av1|aac|dts|ddp?\d?(?:\.\d)?)\b/gi, "")
+    .replace(/\b(bluray|web-?dl|webrip|brrip|hdcam|hdrip)\b/gi, "")
+    .replace(/\b(proper|repack|internal|extended|directors?\s*cut)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (stripped && stripped !== base && stripped.length >= 3) {
+    alternatives.push(stripped);
+  }
+
+  // Strategy 2: Remove season/episode info for broader matching
+  const noEpisode = stripped
+    .replace(/\bs\d{1,2}e\d{1,3}\b/gi, "")
+    .replace(/\bseason\s+\d+\b/gi, "")
+    .replace(/\bepisode\s+\d+\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (noEpisode && noEpisode !== stripped && noEpisode.length >= 3) {
+    alternatives.push(noEpisode);
+  }
+
+  // Strategy 3: Remove year for very specific queries
+  const noYear = base.replace(/\b(19|20)\d{2}\b/g, "").replace(/\s+/g, " ").trim();
+  if (noYear && noYear !== base && noYear.length >= 3) {
+    alternatives.push(noYear);
+  }
+
+  // Strategy 4: Remove language tags for broader matching
+  if (intent.language) {
+    const noLang = base
+      .replace(new RegExp(`\\b${intent.language}\\b`, "gi"), "")
+      .replace(/\b(dual\s*audio|multi\s*audio)\b/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (noLang && noLang !== base && noLang.length >= 3) {
+      alternatives.push(noLang);
+    }
+  }
+
+  return [...new Set(alternatives)].slice(0, 3);
+}
+
 function languageRegion(language: string): Region | undefined {
   const normalized = language.toLowerCase();
   if (["hindi", "tamil", "telugu", "malayalam", "kannada", "bengali", "punjabi"].includes(normalized)) {

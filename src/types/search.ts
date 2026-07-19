@@ -126,6 +126,7 @@ export interface SearchOptions extends SearchFilters {
   limit?: number;
   cache?: boolean;
   enrich?: boolean;
+  expandQuery?: boolean;
   sourceTimeoutMs?: number;
   signal?: AbortSignal;
 }

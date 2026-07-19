@@ -1,9 +1,9 @@
 import type { TorrentOptions, WebTorrentOptions } from "webtorrent";
 import { configuredTrackers } from "../utils/trackers.js";
 
-const DEFAULT_MAX_CONNS = 250;
-const DEFAULT_STORE_CACHE_SLOTS = 64;
-const DEFAULT_MAX_WEB_CONNS = 12;
+const DEFAULT_MAX_CONNS = 350;
+const DEFAULT_STORE_CACHE_SLOTS = 96;
+const DEFAULT_MAX_WEB_CONNS = 16;
 
 type DownloadStrategy = "rarest" | "sequential";
 
@@ -41,13 +41,13 @@ function readStrategy(): DownloadStrategy {
  */
 export function resolveDownloadTuning(): DownloadTuning {
   return {
-    maxConns: readBoundedInteger("TORRENTX_MAX_CONNS", DEFAULT_MAX_CONNS, 55, 800),
-    maxWebConns: readBoundedInteger("TORRENTX_MAX_WEB_CONNS", DEFAULT_MAX_WEB_CONNS, 1, 64),
+    maxConns: readBoundedInteger("TORRENTX_MAX_CONNS", DEFAULT_MAX_CONNS, 55, 1200),
+    maxWebConns: readBoundedInteger("TORRENTX_MAX_WEB_CONNS", DEFAULT_MAX_WEB_CONNS, 1, 96),
     storeCacheSlots: readBoundedInteger(
       "TORRENTX_STORE_CACHE_SLOTS",
       DEFAULT_STORE_CACHE_SLOTS,
       8,
-      256,
+      512,
     ),
     strategy: readStrategy(),
   };

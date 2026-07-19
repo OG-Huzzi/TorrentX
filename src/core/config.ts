@@ -3,8 +3,8 @@ import type { TorrentXConfig } from "../types/config.js";
 export function createConfig(overrides: Partial<TorrentXConfig> = {}): TorrentXConfig {
   return {
     cacheTtlMs: 10 * 60 * 1000,
-    sourceTimeoutMs: 8_000,
-    maxConcurrency: 8,
+    sourceTimeoutMs: 10_000,
+    maxConcurrency: 12,
     metadataLimit: 5,
     tmdbApiKey: process.env.TMDB_API_KEY,
     omdbApiKey: process.env.OMDB_API_KEY,

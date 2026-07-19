@@ -33,9 +33,9 @@ afterEach(() => {
 describe("download tuning", () => {
   it("uses a higher but bounded connection budget by default", () => {
     const tuning = resolveDownloadTuning();
-    expect(tuning.maxConns).toBe(250);
-    expect(tuning.maxWebConns).toBe(12);
-    expect(tuning.storeCacheSlots).toBe(64);
+    expect(tuning.maxConns).toBe(350);
+    expect(tuning.maxWebConns).toBe(16);
+    expect(tuning.storeCacheSlots).toBe(96);
     expect(tuning.strategy).toBe("rarest");
   });
 
@@ -45,9 +45,9 @@ describe("download tuning", () => {
     process.env.TORRENTX_STORE_CACHE_SLOTS = "not-a-number";
 
     const tuning = resolveDownloadTuning();
-    expect(tuning.maxConns).toBe(800);
+    expect(tuning.maxConns).toBe(1200);
     expect(tuning.maxWebConns).toBe(1);
-    expect(tuning.storeCacheSlots).toBe(64);
+    expect(tuning.storeCacheSlots).toBe(96);
   });
 
   it("supports sequential mode when it is explicitly requested", () => {
@@ -66,7 +66,7 @@ describe("download tuning", () => {
 
   it("does not configure a download rate cap", () => {
     const options = webTorrentClientOptions();
-    expect(options.maxConns).toBe(250);
+    expect(options.maxConns).toBe(350);
     expect(options.downloadLimit).toBeUndefined();
     expect(options.uploadLimit).toBeUndefined();
   });

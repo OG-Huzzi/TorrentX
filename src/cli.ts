@@ -10,12 +10,22 @@ import {
   type CliSearchOptions,
 } from "./commands/search.js";
 import { createDefaultSources } from "./sources/index.js";
+import { SourceHealthTracker } from "./services/source-health.js";
+import { warmupDns } from "./services/dns-warmup.js";
 import type { MediaType } from "./types/search.js";
 import { runInteractive } from "./ui/interactive.js";
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.1";
 const config = createConfig();
-const engine = new SearchEngine(createDefaultSources(config), config);
+
+// Initialize adaptive source health tracking (learns from past sessions)
+const healthTracker = new SourceHealthTracker();
+void healthTracker.load();
+
+// Pre-resolve DNS for all source domains in the background
+warmupDns();
+
+const engine = new SearchEngine(createDefaultSources(config), config, undefined, healthTracker);
 const program = new Command();
 
 program
@@ -110,4 +120,9 @@ program.configureOutput({
 program.parseAsync().catch((error: unknown) => {
   console.error(`torrentx: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
+}).finally(() => {
+  // Flush learned source-health metrics once the command (or interactive
+  // session) has fully settled. Awaited so the write completes before Node
+  // drains its event loop and exits.
+  return healthTracker.save();
 });
