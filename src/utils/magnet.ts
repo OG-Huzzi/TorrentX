@@ -48,3 +48,35 @@ export function sanitizeMagnet(uri: string): string {
 
   return sanitized;
 }
+
+const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+function base32ToHex(value: string): string | undefined {
+  let bits = 0;
+  let buffer = 0;
+  let hex = "";
+  for (const char of value.toUpperCase()) {
+    const index = BASE32_ALPHABET.indexOf(char);
+    if (index === -1) return undefined;
+    buffer = (buffer << 5) | index;
+    bits += 5;
+    if (bits >= 8) {
+      bits -= 8;
+      hex += ((buffer >> bits) & 0xff).toString(16).padStart(2, "0");
+    }
+  }
+  return hex;
+}
+
+/**
+ * The BitTorrent v1 info hash of a magnet as 40 lowercase hex characters.
+ * Magnets carry it as hex (40 chars) or base32 (32 chars); both forms of the
+ * same torrent must compare equal for dedupe, consensus and duplicate checks.
+ */
+export function infoHashFromMagnet(uri: string | undefined): string | undefined {
+  const raw = uri?.match(/[?&]xt=urn:btih:([^&]+)/i)?.[1];
+  if (!raw) return undefined;
+  if (/^[a-f0-9]{40}$/i.test(raw)) return raw.toLowerCase();
+  if (/^[a-z2-7]{32}$/i.test(raw)) return base32ToHex(raw);
+  return undefined;
+}

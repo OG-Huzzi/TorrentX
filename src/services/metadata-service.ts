@@ -1,6 +1,6 @@
 import type { TorrentXConfig } from "../types/config.js";
 import type { MediaMetadata, SearchIntent, SearchResult } from "../types/search.js";
-import { normalizeTitle } from "../utils/text.js";
+import { normalizeTitle, stripControlChars } from "../utils/text.js";
 import { HttpClient } from "./http-client.js";
 
 interface TmdbSearchResponse {
@@ -51,8 +51,42 @@ const TMDB_GENRES: Record<number, string> = {
   10765: "Sci-Fi & Fantasy",
 };
 
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const MAX_CANDIDATES = 5;
+/** Minimum token overlap (0..1) before a TMDB/OMDB hit is trusted. */
+const SIMILARITY_THRESHOLD = 0.5;
+
+/**
+ * Compare two titles by normalized token overlap. Torrent titles are noisy
+ * ("Movie.Name.2024.1080p.WEB-DL.x264-GROUP"), so the metadata API hit must
+ * share at least half its tokens with the search title before we trust it —
+ * previously we blindly took results[0], which often attached the wrong movie.
+ */
+export function titlesMatch(a: string, b: string): boolean {
+  const tokens = (value: string) =>
+    new Set(
+      normalizeTitle(value)
+        .split(/\s+/)
+        .filter((token) => token.length > 1),
+    );
+  const setA = tokens(a);
+  const setB = tokens(b);
+  if (setA.size === 0 || setB.size === 0) return false;
+  let shared = 0;
+  for (const token of setA) if (setB.has(token)) shared += 1;
+  return shared / Math.min(setA.size, setB.size) >= SIMILARITY_THRESHOLD;
+}
+
+interface CacheEntry {
+  metadata: MediaMetadata | undefined;
+  expiresAt: number;
+}
+
 export class MetadataService {
   private readonly http: HttpClient;
+  private readonly cache = new Map<string, CacheEntry>();
+  /** Count of failed lookups during the most recent enrich() call. */
+  enrichmentFailures = 0;
 
   constructor(private readonly config: TorrentXConfig) {
     this.http = new HttpClient(config);
@@ -67,10 +101,16 @@ export class MetadataService {
       return results;
     }
 
+    this.enrichmentFailures = 0;
     const enriched = await Promise.all(
       results.slice(0, this.config.metadataLimit).map(async (result): Promise<SearchResult> => {
-        const metadata = await this.lookup(result, intent).catch(() => undefined);
-        return metadata ? { ...result, metadata } : result;
+        try {
+          const metadata = await this.lookup(result, intent);
+          return metadata ? { ...result, metadata } : result;
+        } catch {
+          this.enrichmentFailures += 1;
+          return result;
+        }
       }),
     );
 
@@ -83,14 +123,37 @@ export class MetadataService {
   ): Promise<MediaMetadata | undefined> {
     const title = normalizeTitle(result.title).replace(/\b(19|20)\d{2}\b.*$/, "").trim();
     const year = result.title.match(/\b((?:19|20)\d{2})\b/)?.[1];
+    if (!title) return undefined;
 
+    const cacheKey = `${title}:${year ?? ""}:${intent.mediaType ?? ""}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.metadata;
+    }
+
+    let metadata: MediaMetadata | undefined;
+    let providerError: unknown;
     if (this.config.tmdbApiKey) {
-      return this.lookupTmdb(title, intent, year);
+      try {
+        metadata = await this.lookupTmdb(title, intent, year);
+      } catch (error) {
+        providerError = error;
+      }
     }
-    if (this.config.omdbApiKey) {
-      return this.lookupOmdb(title, year);
+    // Fall back to OMDB when TMDB is unset, returned nothing, or failed —
+    // previously OMDB was unreachable whenever a TMDB key was configured.
+    if (!metadata && this.config.omdbApiKey) {
+      try {
+        metadata = await this.lookupOmdb(title, year);
+      } catch (error) {
+        providerError = error;
+      }
     }
-    return undefined;
+    // Surface a hard failure only when every configured provider errored.
+    if (!metadata && providerError) throw providerError;
+
+    this.cache.set(cacheKey, { metadata, expiresAt: Date.now() + CACHE_TTL_MS });
+    return metadata;
   }
 
   private async lookupTmdb(
@@ -104,7 +167,12 @@ export class MetadataService {
     url.searchParams.set("query", title);
     if (year) url.searchParams.set(type === "movie" ? "year" : "first_air_date_year", year);
     const payload = await this.http.json<TmdbSearchResponse>(url.toString());
-    const item = payload.results?.[0];
+
+    // Pick the first plausible match instead of blindly taking results[0].
+    const candidates = (payload.results ?? []).slice(0, MAX_CANDIDATES);
+    const item = candidates.find((candidate) =>
+      titlesMatch(title, candidate.title ?? candidate.name ?? ""),
+    );
     if (!item) return undefined;
 
     const date = item.release_date ?? item.first_air_date;
@@ -128,6 +196,7 @@ export class MetadataService {
     if (year) url.searchParams.set("y", year);
     const item = await this.http.json<OmdbResponse>(url.toString());
     if (item.Response !== "True" || !item.Title) return undefined;
+    if (!titlesMatch(title, item.Title)) return undefined;
 
     return compactMetadata({
       title: item.Title,
@@ -154,15 +223,20 @@ function compactMetadata(input: {
   runtimeMinutes?: number | undefined;
   overview?: string | undefined;
 }): MediaMetadata {
+  // Provider text is printed to the terminal: drop control characters.
+  const clean = (value: string | undefined) => (value ? stripControlChars(value).trim() : undefined);
+  const language = clean(input.language);
+  const country = clean(input.country);
+  const overview = clean(input.overview);
   return {
-    title: input.title,
+    title: clean(input.title) ?? "",
     ...(input.year ? { year: input.year } : {}),
     ...(input.rating !== undefined ? { rating: input.rating } : {}),
     ...(input.posterUrl ? { posterUrl: input.posterUrl } : {}),
-    ...(input.language ? { language: input.language } : {}),
-    ...(input.country ? { country: input.country } : {}),
-    ...(input.genres?.length ? { genres: input.genres } : {}),
+    ...(language ? { language } : {}),
+    ...(country ? { country } : {}),
+    ...(input.genres?.length ? { genres: input.genres.map((genre) => stripControlChars(genre)) } : {}),
     ...(input.runtimeMinutes ? { runtimeMinutes: input.runtimeMinutes } : {}),
-    ...(input.overview ? { overview: input.overview } : {}),
+    ...(overview ? { overview } : {}),
   };
 }

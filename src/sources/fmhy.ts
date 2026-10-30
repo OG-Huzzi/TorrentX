@@ -1,6 +1,7 @@
 import type { SearchRequest, SourceAdapter, SearchResult } from "../types/search.js";
 import type { HttpClient } from "../services/http-client.js";
 import { CacheService } from "../services/cache-service.js";
+import { FMHY_API_HOST } from "./mirrors.js";
 import { createResult } from "./source-utils.js";
 
 interface FmhyEntry {
@@ -17,13 +18,19 @@ export class FmhyAdapter implements SourceAdapter {
   readonly mediaTypes = ["movie", "tv", "anime", "game", "software", "documentary", "other"] as const;
   readonly regions = ["global"] as const;
 
-  private readonly cache = new CacheService(24 * 60 * 60 * 1000); // 24 hours TTL
+  private readonly cache: CacheService;
   private entries: FmhyEntry[] | null = null;
   private loadPromise: Promise<FmhyEntry[]> | null = null;
 
-  constructor(private readonly http: HttpClient) {}
+  constructor(
+    private readonly http: HttpClient,
+    cache?: CacheService,
+  ) {
+    this.cache = cache ?? new CacheService(24 * 60 * 60 * 1000); // 24 hours TTL
+  }
 
   async search(request: SearchRequest): Promise<SearchResult[]> {
+    if (request.top) return [];
     const entries = await this.ensureEntries(request.signal);
     const queryWords = request.intent.query.toLowerCase().split(/\s+/).filter(Boolean);
     if (queryWords.length === 0) return [];
@@ -104,7 +111,7 @@ export class FmhyAdapter implements SourceAdapter {
     }
 
     // 2. Cache miss — download single-page Markdown
-    const markdown = await this.http.text("https://api.fmhy.net/single-page", signal);
+    const markdown = await this.http.text(`https://${FMHY_API_HOST}/single-page`, signal);
     const parsed = this.parseMarkdown(markdown);
 
     if (parsed.length > 0) {
@@ -143,10 +150,10 @@ export class FmhyAdapter implements SourceAdapter {
           }
 
           // Strip main link and leading icons from description
-          let desc = trimmed
+          const desc = trimmed
             .replace(/^\*\s*(?:↪️|⭐|🌐|↪|💎|🔥|⚡)?\s*/, "")
             .replace(/(?:\*\*)?\[[^\]]+\]\([^)]+\)(?:\*\*)?/, "")
-            .replace(/^\s*[-\/|,;:]\s*/, "")
+            .replace(/^\s*[-/|,;:]\s*/, "")
             .trim();
 
           parsed.push({

@@ -8,3 +8,13 @@ coverage/
 tmp/
 temp/
 .qoder/
+
+# Local user configuration (see README "Configuration file")
+torrentx.json
+.torrentxrc
+
+# Local AI/editor settings
+.claude/
+.claude.json
+.opencode/
+.cursor/

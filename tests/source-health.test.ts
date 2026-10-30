@@ -66,3 +66,36 @@ describe("SourceHealthTracker", () => {
     expect(reloaded.getLearnedReliability("anything")).toBeUndefined();
   });
 });
+
+describe("SourceHealthTracker timeout recovery", () => {
+  it("widens the adaptive timeout after a timed-out run", async () => {
+    const tracker = new SourceHealthTracker(await tempFile());
+    tracker.recordSuccess("fast", 1_000); // 2.5x avg -> 3s floor
+    expect(tracker.getTimeout("fast")).toBe(3_000);
+
+    tracker.recordFailure("fast", { timedOut: true });
+    expect(tracker.getTimeout("fast")).toBe(4_500);
+
+    for (let i = 0; i < 10; i++) tracker.recordFailure("fast", { timedOut: true });
+    expect(tracker.getTimeout("fast")).toBe(15_000);
+  });
+
+  it("keeps the timeout for non-timeout failures", async () => {
+    const tracker = new SourceHealthTracker(await tempFile());
+    tracker.recordSuccess("blocked", 1_000);
+    tracker.recordFailure("blocked");
+    expect(tracker.getTimeout("blocked")).toBe(3_000);
+  });
+
+  it("does not let a late load overwrite runs recorded this session", async () => {
+    const file = await tempFile();
+    const old = new SourceHealthTracker(file);
+    for (let i = 0; i < 5; i++) old.recordFailure("src");
+    await old.save();
+
+    const tracker = new SourceHealthTracker(file);
+    tracker.recordSuccess("src", 500);
+    await tracker.load();
+    expect(tracker.getLearnedReliability("src")).toBe(0.8);
+  });
+});

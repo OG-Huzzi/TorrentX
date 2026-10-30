@@ -41,3 +41,10 @@ describe("expandQuery", () => {
     expect(expandQuery(intent)).toEqual([]);
   });
 });
+
+describe("expandQuery language stripping", () => {
+  it("treats a user-supplied language literally instead of as a regex", () => {
+    const intent = inferSearchIntent("compiler course", { language: "c++" });
+    expect(() => expandQuery(intent)).not.toThrow();
+  });
+});

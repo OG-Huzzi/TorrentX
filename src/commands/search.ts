@@ -19,7 +19,8 @@ export interface CliSearchOptions {
   cache?: boolean;
   enrich?: boolean;
   fourK?: boolean;
-  type?: MediaType;
+  type?: string;
+  tor?: boolean;
 }
 
 export function addSearchOptions(command: Command): Command {
@@ -30,13 +31,18 @@ export function addSearchOptions(command: Command): Command {
     .option("--min-size <size>", "minimum size, for example 700MB")
     .option("--max-size <size>", "maximum size, for example 8GB")
     .option("-l, --language <language>", "language filter and search hint")
+    .option("-t, --type <type>", "media type: movie, tv, anime, game, software, documentary")
     .option("--min-seeds <number>", "minimum number of seeders")
     .option("--codec <codec>", "codec filter, for example x265")
     .option("-n, --limit <number>", "maximum results", "100")
-    .option("--no-cache", "skip cached search results")
-    .option("--no-enrich", "disable metadata API enrichment")
-    .option("--mobile", "force compact Termux-style output")
-    .option("--json", "emit a machine-readable search report");
+    .option("--json", "emit a machine-readable search report")
+    .addHelpText(
+      "after",
+      "\nGlobal options (accepted anywhere): --tor  route requests through the built-in Tor connection\n" +
+        "                                  --no-cache    skip cached search results\n" +
+        "                                  --no-enrich   disable metadata API enrichment\n" +
+        "                                  --mobile      force compact Termux-style output",
+    );
 }
 
 export async function executeSearch(
@@ -69,6 +75,7 @@ export function toSearchOptions(
   const minSeeders = parsePositiveInteger(options.minSeeds, "min-seeds");
   const minSizeBytes = parseCliSize(options.minSize, "min-size");
   const maxSizeBytes = parseCliSize(options.maxSize, "max-size");
+  const type = mediaType ?? parseMediaType(options.type);
 
   return {
     limit: limit ?? 100,
@@ -87,14 +94,34 @@ export function toSearchOptions(
     ...optional("language", options.language),
     ...optional("minSeeders", minSeeders),
     ...optional("codec", options.codec),
-    ...optional("mediaType", mediaType ?? options.type),
+    ...optional("mediaType", type),
   };
+}
+
+const MEDIA_TYPES: readonly MediaType[] = [
+  "movie",
+  "tv",
+  "anime",
+  "game",
+  "software",
+  "documentary",
+  "other",
+];
+
+function parseMediaType(value: string | undefined): MediaType | undefined {
+  if (value === undefined) return undefined;
+  if ((MEDIA_TYPES as readonly string[]).includes(value)) {
+    return value as MediaType;
+  }
+  throw new Error(
+    `--type must be one of: ${MEDIA_TYPES.join(", ")}.`,
+  );
 }
 
 function parsePositiveInteger(value: string | undefined, name: string): number | undefined {
   if (value === undefined) return undefined;
   const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 0) {
+  if (!Number.isInteger(parsed) || parsed < 1) {
     throw new Error(`--${name} must be a positive integer.`);
   }
   return parsed;

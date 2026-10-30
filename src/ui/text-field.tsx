@@ -73,6 +73,7 @@ export function TextField({
         return;
       }
       if (key.ctrl || key.meta || !input) return;
+      // eslint-disable-next-line no-control-regex -- intentionally strips control chars from pasted input
       const printable = input.replace(/[\x00-\x1f\x7f]/g, "");
       if (!printable) return;
       onChange(value.slice(0, cursor) + printable + value.slice(cursor));

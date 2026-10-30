@@ -32,6 +32,15 @@ export function applyFilters(results: SearchResult[], filters: SearchFilters): S
     if (filters.mediaType && result.mediaType && result.mediaType !== filters.mediaType) {
       return false;
     }
+    // Language is a soft filter: only drop results whose language is known
+    // and does not match, so results without language metadata survive.
+    if (
+      filters.language &&
+      result.language &&
+      !result.language.toLowerCase().includes(filters.language.toLowerCase())
+    ) {
+      return false;
+    }
     return true;
   });
 }

@@ -18,6 +18,15 @@ export function describeSourceFailure(
     if (error.status === 429) {
       return { kind: "rate_limited", message: "Rate limited (HTTP 429)" };
     }
+    if (error.status === 402) {
+      return { kind: "payment_required", message: "Payment required (HTTP 402)" };
+    }
+    if (error.botCheck) {
+      return {
+        kind: "blocked",
+        message: `Bot check (HTTP ${error.status}) — the site requires a browser`,
+      };
+    }
     if (error.status === 401 || error.status === 403 || error.status === 451) {
       return { kind: "blocked", message: `Blocked (HTTP ${error.status})` };
     }
@@ -46,6 +55,8 @@ export function sourceFailureLabel(
       return "cancelled";
     case "invalid_response":
       return "changed";
+    case "payment_required":
+      return "paid";
     case "rate_limited":
       return "limited";
     case "timeout":

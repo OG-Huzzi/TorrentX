@@ -42,7 +42,12 @@ export interface SearchRequest {
   filters: SearchFilters;
   limit: number;
   signal?: AbortSignal;
+  /** When set, sources serve their top/popular listings instead of a search. */
+  top?: TopPeriod;
 }
+
+/** Browse period for top listings. */
+export type TopPeriod = "today" | "week";
 
 export interface MediaMetadata {
   title: string;
@@ -85,6 +90,8 @@ export interface SourceAdapter {
   readonly reliability: number;
   readonly mediaTypes: readonly MediaType[];
   readonly regions: readonly Region[];
+  /** Set on adapters that serve top/popular listings (request.top). */
+  readonly supportsTop?: boolean;
   search(request: SearchRequest): Promise<SearchResult[]>;
 }
 
@@ -93,6 +100,7 @@ export type SourceFailureKind =
   | "cancelled"
   | "invalid_response"
   | "network"
+  | "payment_required"
   | "rate_limited"
   | "timeout"
   | "unavailable";
@@ -113,6 +121,8 @@ export interface SearchReport {
   sources: SourceRun[];
   durationMs: number;
   cached: boolean;
+  /** How many metadata enrichments failed during this search (0 = none). */
+  metadataFailures?: number;
 }
 
 export interface SearchProgress extends SearchReport {
@@ -129,4 +139,6 @@ export interface SearchOptions extends SearchFilters {
   expandQuery?: boolean;
   sourceTimeoutMs?: number;
   signal?: AbortSignal;
+  /** Browse the top listings ("today" | "week") instead of searching. */
+  top?: TopPeriod;
 }

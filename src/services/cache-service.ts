@@ -1,7 +1,12 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { stableHash } from "../utils/hash.js";
+
+/** Disk entries untouched this long are removed (longer than any TTL in use). */
+const DISK_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+/** Cache entry files are named by stableHash(): 16 hex characters. */
+const ENTRY_FILE = /^[0-9a-f]{16}\.json(?:\.\d+\.tmp)?$/;
 
 interface CacheEntry<T> {
   createdAt: number;
@@ -17,6 +22,7 @@ export class CacheService {
   private readonly directory: string;
   private readonly memory = new Map<string, CacheEntry<unknown>>();
   private readonly maxMemoryEntries: number;
+  private pruned = false;
 
   constructor(
     private readonly ttlMs: number,
@@ -71,10 +77,35 @@ export class CacheService {
 
     // Persist to disk asynchronously
     await mkdir(this.directory, { recursive: true });
+    if (!this.pruned) {
+      this.pruned = true;
+      void this.prune().catch(() => undefined);
+    }
     const file = this.fileFor(hash);
     const temporary = `${file}.${process.pid}.tmp`;
     await writeFile(temporary, JSON.stringify(entry), "utf8");
     await rename(temporary, file);
+  }
+
+  /**
+   * Delete expired entry files. Every query writes a file and nothing else
+   * removes them, so without this the directory grows forever. The
+   * directory is shared (other caches and source-health.json live there),
+   * so only files named like cache entries are touched, and only once they
+   * are older than any cache's TTL.
+   */
+  async prune(now = Date.now()): Promise<void> {
+    for (const name of await readdir(this.directory)) {
+      if (!ENTRY_FILE.test(name)) continue;
+      const file = path.join(this.directory, name);
+      try {
+        if (now - (await stat(file)).mtimeMs > DISK_MAX_AGE_MS) {
+          await rm(file, { force: true });
+        }
+      } catch {
+        // Concurrently removed or unreadable — skip it.
+      }
+    }
   }
 
   private memorySet(hash: string, entry: CacheEntry<unknown>): void {

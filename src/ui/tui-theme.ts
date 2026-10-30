@@ -28,12 +28,9 @@ const SOURCE_COLORS: Record<string, string> = {
   eztv: TUI_COLOR.warn,
   fitgirl: "#d8a0ff",
   piratebay: TUI_COLOR.blue,
-  solidtorrents: "#f78c6c",
   bitsearch: "#c792ea",
-  bittorrented: TUI_COLOR.orange,
   limetorrents: "#c3e88d",
   subsplease: TUI_COLOR.accent,
-  "1337x": "#ff6b6b",
   torrentgalaxy: "#4ecdc4",
 };
 
@@ -48,12 +45,9 @@ export function sourceTag(source: string): string {
     eztv: "EZTV",
     fitgirl: "FG",
     piratebay: "TPB",
-    solidtorrents: "SOLID",
     bitsearch: "BIT",
-    bittorrented: "BTD",
     limetorrents: "LIME",
     subsplease: "SP",
-    "1337x": "1337",
     torrentgalaxy: "TGX",
   };
   return tags[source.toLowerCase()] ?? source.slice(0, 6).toUpperCase();
