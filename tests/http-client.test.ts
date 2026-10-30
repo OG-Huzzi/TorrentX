@@ -27,4 +27,21 @@ describe("HttpClient", () => {
       }),
     );
   });
+
+  it("flags Cloudflare bot-check responses without retrying them", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response("<title>Just a moment...</title>", {
+        status: 403,
+        headers: { "cf-mitigated": "challenge" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new HttpClient(createConfig());
+    await expect(client.text("https://challenged.example/")).rejects.toMatchObject({
+      status: 403,
+      botCheck: true,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

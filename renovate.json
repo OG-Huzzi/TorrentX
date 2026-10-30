@@ -1,0 +1,14 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "schedule": ["before 6am on monday"],
+  "rangeStrategy": "bump",
+  "lockFileMaintenance": { "enabled": true },
+  "packageRules": [
+    {
+      "matchPackageNames": ["webtorrent"],
+      "description": "The postinstall patch targets exact webtorrent source strings — upgrades must verify scripts/patch-webtorrent.mjs and the runtime patch markers still match.",
+      "enabled": true
+    }
+  ]
+}

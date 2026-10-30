@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -99,14 +99,69 @@ describe("DownloadStore", () => {
     expect(loaded.map((r) => r.title).sort()).toEqual(["A", "B"]);
   });
 
-  it("atomic write creates valid JSON", async () => {
+  it("atomic write creates valid enveloped JSON", async () => {
     const store = new DownloadStore();
     await store.load();
     await store.addRecord(makeRecord({ title: "Check" }));
 
     const raw = await readFile(join(TEST_DIR, "downloads.json"), "utf8");
     const parsed = JSON.parse(raw);
-    expect(Array.isArray(parsed)).toBe(true);
-    expect(parsed[0].title).toBe("Check");
+    expect(parsed.version).toBe(1);
+    expect(Array.isArray(parsed.records)).toBe(true);
+    expect(parsed.records[0].title).toBe("Check");
+  });
+
+  it("migrates legacy bare-array files to the enveloped format", async () => {
+    const legacy = [makeRecord({ title: "Legacy Record" })];
+    await writeFile(
+      join(TEST_DIR, "downloads.json"),
+      JSON.stringify(legacy),
+      "utf8",
+    );
+
+    const store = new DownloadStore();
+    const loaded = await store.load();
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0]?.title).toBe("Legacy Record");
+
+    const raw = await readFile(join(TEST_DIR, "downloads.json"), "utf8");
+    const migrated = JSON.parse(raw);
+    expect(migrated.version).toBe(1);
+    expect(migrated.records).toHaveLength(1);
+  });
+
+  it("backs up corrupt files instead of silently wiping them", async () => {
+    await writeFile(
+      join(TEST_DIR, "downloads.json"),
+      "{not valid json",
+      "utf8",
+    );
+
+    const store = new DownloadStore();
+    const loaded = await store.load();
+    expect(loaded).toEqual([]);
+
+    const { readdir } = await import("node:fs/promises");
+    const entries = await readdir(TEST_DIR);
+    const backup = entries.find((name) => name.startsWith("downloads.json.corrupt-"));
+    expect(backup).toBeDefined();
+  });
+
+  it("backs up files with unknown schema versions instead of wiping them", async () => {
+    await writeFile(
+      join(TEST_DIR, "downloads.json"),
+      JSON.stringify({ version: 99, records: "future-format" }),
+      "utf8",
+    );
+
+    const store = new DownloadStore();
+    const loaded = await store.load();
+    expect(loaded).toEqual([]);
+
+    const { readdir } = await import("node:fs/promises");
+    const entries = await readdir(TEST_DIR);
+    expect(
+      entries.some((name) => name.startsWith("downloads.json.corrupt-")),
+    ).toBe(true);
   });
 });

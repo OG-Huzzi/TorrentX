@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readdir, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { CacheService } from "../src/services/cache-service.js";
@@ -47,5 +47,24 @@ describe("CacheService (two-tier)", () => {
   it("misses cleanly for unknown keys", async () => {
     const cache = new CacheService(60_000, await tempDir());
     expect(await cache.get("never-set")).toBeUndefined();
+  });
+});
+
+describe("CacheService pruning", () => {
+  it("removes old entry files and leaves everything else alone", async () => {
+    const dir = await tempDir();
+    const old = path.join(dir, "0123456789abcdef.json");
+    const fresh = path.join(dir, "fedcba9876543210.json");
+    const health = path.join(dir, "source-health.json");
+    for (const file of [old, fresh, health]) await writeFile(file, "{}", "utf8");
+    const longAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    await utimes(old, longAgo, longAgo);
+    await utimes(health, longAgo, longAgo);
+
+    await new CacheService(60_000, dir).prune();
+
+    expect((await readdir(dir)).sort()).toEqual(
+      ["fedcba9876543210.json", "source-health.json"].sort(),
+    );
   });
 });

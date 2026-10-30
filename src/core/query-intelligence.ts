@@ -1,4 +1,5 @@
 import type { MediaType, Region, SearchIntent } from "../types/search.js";
+import { escapeRegExp } from "../utils/text.js";
 
 const MEDIA_ALIASES: Record<string, MediaType> = {
   movie: "movie",
@@ -86,7 +87,7 @@ export function inferSearchIntent(
   if (mediaType === "movie") preferredSources.push("yts");
   if (mediaType === "tv") preferredSources.push("eztv");
   if (mediaType === "game") preferredSources.push("fitgirl");
-  if (region === "india") preferredSources.push("1337x", "torrentgalaxy", "piratebay");
+  if (region === "india") preferredSources.push("torrentgalaxy", "piratebay", "bitsearch");
 
   return {
     query: queryTerms.join(" ").trim() || rawQuery.trim(),
@@ -139,7 +140,7 @@ export function expandQuery(intent: SearchIntent): string[] {
   // Strategy 4: Remove language tags for broader matching
   if (intent.language) {
     const noLang = base
-      .replace(new RegExp(`\\b${intent.language}\\b`, "gi"), "")
+      .replace(new RegExp(`\\b${escapeRegExp(intent.language)}\\b`, "gi"), "")
       .replace(/\b(dual\s*audio|multi\s*audio)\b/gi, "")
       .replace(/\s+/g, " ")
       .trim();

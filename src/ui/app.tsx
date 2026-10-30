@@ -11,6 +11,7 @@ import type {
   SearchProgress,
   SearchResult,
   SourceRun,
+  TopPeriod,
 } from "../types/search.js";
 import { formatSize } from "../utils/size.js";
 import { truncate } from "../utils/text.js";
@@ -60,6 +61,8 @@ export function TorrentXApp({ engine, options, downloadManager, initialTorrentOr
   const [screen, setScreen] = useState<Screen>("splash");
   const [draft, setDraft] = useState("");
   const [activeQuery, setActiveQuery] = useState<string | null>(null);
+  // Top-listing mode: the app opens on the category's Top 100 (this week).
+  const [topPeriod, setTopPeriod] = useState<TopPeriod | null>("week");
   const [editing, setEditing] = useState(false);
   const [categoryIndex, setCategoryIndex] = useState(() => {
     const index = CATEGORIES.findIndex((item) => item.mediaType === options.mediaType);
@@ -138,7 +141,7 @@ export function TorrentXApp({ engine, options, downloadManager, initialTorrentOr
   }, [results, selectedId]);
 
   useEffect(() => {
-    if (activeQuery === null) return;
+    if (activeQuery === null && topPeriod === null) return;
     const controller = new AbortController();
     setProgress(null);
     setNotice(null);
@@ -148,8 +151,10 @@ export function TorrentXApp({ engine, options, downloadManager, initialTorrentOr
       ...options,
       signal: controller.signal,
       ...(mediaType ? { mediaType } : {}),
+      ...(topPeriod ? { top: topPeriod } : {}),
     };
     delete (searchOptions as SearchOptions & { mobile?: boolean }).mobile;
+    const query = topPeriod ? "" : activeQuery ?? "";
 
     let timer: ReturnType<typeof setTimeout> | null = null;
     let pendingProgress: typeof progress = null;
@@ -166,7 +171,7 @@ export function TorrentXApp({ engine, options, downloadManager, initialTorrentOr
     };
 
     void engine
-      .search(activeQuery, searchOptions, (next) => {
+      .search(query, searchOptions, (next) => {
         throttledSetProgress(next);
       })
       .then(async (report) => {
@@ -180,6 +185,9 @@ export function TorrentXApp({ engine, options, downloadManager, initialTorrentOr
           completedSources: report.sources.length,
           totalSources: report.sources.length,
         } as SearchProgress);
+        if (report.metadataFailures) {
+          setNotice(`Metadata lookup failed for ${report.metadataFailures} result(s)`);
+        }
         await new ResultStore().save(report.results).catch(() => undefined);
       })
       .catch((error: unknown) => {
@@ -196,16 +204,25 @@ export function TorrentXApp({ engine, options, downloadManager, initialTorrentOr
       controller.abort();
       if (timer) clearTimeout(timer);
     };
-  }, [activeQuery, category.mediaType, engine, options, searchVersion]);
+  }, [activeQuery, topPeriod, category.mediaType, engine, options, searchVersion]);
 
   const submit = (raw: string) => {
     const query = raw.trim();
     if (!query) {
-      setNotice("Enter a search query.");
+      // Empty query = the category's Top 100 (press t to switch period).
+      setDraft("");
+      setActiveQuery(null);
+      setTopPeriod(topPeriod ?? "week");
+      setScreen("results");
+      setEditing(false);
+      setSidebarFocused(false);
+      setSelectedId(null);
+      setSearchVersion((version) => version + 1);
       return;
     }
     setDraft(query);
     setActiveQuery(query);
+    setTopPeriod(null);
     setScreen("results");
     setEditing(false);
     setSidebarFocused(false);
@@ -224,11 +241,11 @@ export function TorrentXApp({ engine, options, downloadManager, initialTorrentOr
     setActionBusy(true);
     try {
       if (action === "copy") {
-        await actions.copy(selected);
-        setNotice("Magnet copied to clipboard.");
+        const uri = await actions.copy(selected);
+        setNotice(uri.startsWith("magnet:") ? "Magnet copied to clipboard." : "Link copied to clipboard.");
       } else if (action === "open") {
-        await actions.open(selected);
-        setNotice("Opened in your torrent client.");
+        const uri = await actions.open(selected);
+        setNotice(uri.startsWith("magnet:") ? "Opened in your torrent client." : "Opened in your browser.");
       } else {
         const destination = await actions.export(selected);
         setNotice(`Exported to ${destination}`);
@@ -275,6 +292,18 @@ export function TorrentXApp({ engine, options, downloadManager, initialTorrentOr
       return;
     }
     if (input === "r") {
+      setSearchVersion((version) => version + 1);
+      return;
+    }
+    if (input === "t") {
+      // Top 100 mode: enter it (this week) or flip the period.
+      const next: TopPeriod =
+        topPeriod === "week" ? "today" : topPeriod === "today" ? "week" : "week";
+      setTopPeriod(next);
+      setActiveQuery(null);
+      setDraft("");
+      setScreen("results");
+      setNotice(`Top 100 · ${next === "today" ? "last 24h" : "this week"}`);
       setSearchVersion((version) => version + 1);
       return;
     }
@@ -393,6 +422,7 @@ export function TorrentXApp({ engine, options, downloadManager, initialTorrentOr
               sort={sort}
               loading={progress === null || progress.completedSources < progress.totalSources}
               cached={progress?.cached === true}
+              top={topPeriod}
               rows={layoutRows}
               width={compact ? size.columns - 4 : size.columns - 20}
               compact={compact}
@@ -590,6 +620,7 @@ const ResultsPanel = memo(function ResultsPanel({
   sort,
   loading,
   cached,
+  top,
   rows,
   width,
   compact,
@@ -599,6 +630,7 @@ const ResultsPanel = memo(function ResultsPanel({
   sort: ResultSort;
   loading: boolean;
   cached: boolean;
+  top: TopPeriod | null;
   rows: number;
   width: number;
   compact: boolean;
@@ -619,7 +651,7 @@ const ResultsPanel = memo(function ResultsPanel({
       overflow="hidden"
     >
       <Box justifyContent="space-between">
-        <Text bold color={TUI_COLOR.text}>{`Results ${results.length ? `(${results.length})` : ""}`}</Text>
+        <Text bold color={TUI_COLOR.text}>{`${top ? `Top 100 · ${top === "today" ? "last 24h" : "this week"}${results.length ? ` (${results.length})` : ""}` : `Results ${results.length ? `(${results.length})` : ""}`}`}</Text>
         <Text dimColor>{`${cached ? "cache  " : ""}sort: ${sort}${loading ? "  searching" : ""}`}</Text>
       </Box>
       {!results.length ? (
@@ -743,9 +775,11 @@ function HelpView({ columns, rows, notice }: { columns: number; rows: number; no
         <Box marginTop={1} flexDirection="column">
           <Text bold color={TUI_COLOR.accentBright}>Search and actions</Text>
           <Text><Text color={TUI_COLOR.accent}>/</Text><Text dimColor>  Edit search</Text></Text>
+          <Text><Text color={TUI_COLOR.accent}>enter (empty)</Text><Text dimColor>  Browse the category's Top 100</Text></Text>
+          <Text><Text color={TUI_COLOR.accent}>t</Text><Text dimColor>  Top 100: switch this week / last 24h</Text></Text>
           <Text><Text color={TUI_COLOR.accent}>s</Text><Text dimColor>  Cycle rank, seeds, size, newest</Text></Text>
           <Text><Text color={TUI_COLOR.accent}>r</Text><Text dimColor>  Refresh current search</Text></Text>
-          <Text><Text color={TUI_COLOR.accent}>d or o</Text><Text dimColor>  Open in system torrent client</Text></Text>
+          <Text><Text color={TUI_COLOR.accent}>d or o</Text><Text dimColor>  Open in torrent client (or browser for pages)</Text></Text>
           <Text><Text color={TUI_COLOR.accent}>D (shift)</Text><Text dimColor>  Download with built-in client</Text></Text>
           <Text><Text color={TUI_COLOR.accent}>y or m</Text><Text dimColor>  Copy magnet</Text></Text>
           <Text><Text color={TUI_COLOR.accent}>e</Text><Text dimColor>  Export magnet</Text></Text>

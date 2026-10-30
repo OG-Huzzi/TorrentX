@@ -113,4 +113,11 @@ function renderFooter(report: SearchReport): void {
       ),
     );
   }
+  if (report.metadataFailures) {
+    console.log(
+      theme.muted(
+        `Metadata lookup failed for ${report.metadataFailures} result(s); set TMDB_API_KEY or OMDB_API_KEY for richer details.`,
+      ),
+    );
+  }
 }
